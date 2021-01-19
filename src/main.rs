@@ -1,3 +1,6 @@
+mod db;
+mod model;
+
 use {
     anyhow::{Context as _, Result},
     async_trait::async_trait,
@@ -52,10 +55,10 @@ struct DiscordEventHandler;
 #[async_trait]
 impl EventHandler for DiscordEventHandler {
     async fn ready(&self, _: Context, ready: Ready) {
-        log::info!("DiscordBot({}) is connected!", ready.user.name);
+        tracing::info!("DiscordBot({}) is connected!", ready.user.name);
     }
 
-    async fn message(&self, ctx: Context, msg: Message) {
+    async fn message(&self, _: Context, _: Message) {
         todo!("message handler");
     }
 }

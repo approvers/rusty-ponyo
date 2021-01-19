@@ -953,7 +953,6 @@ dependencies = [
  "anyhow",
  "async-trait",
  "dotenv",
- "log",
  "mongodb",
  "serde",
  "serenity",
