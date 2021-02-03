@@ -1,18 +1,20 @@
+#![allow(dead_code)]
+
+mod bot;
+mod client;
 mod db;
 mod model;
 
 use {
     anyhow::{Context as _, Result},
-    async_trait::async_trait,
-    serenity::{
-        client::{Client, Context, EventHandler},
-        model::{channel::Message, gateway::Ready},
-    },
     std::sync::Arc,
     tokio::sync::RwLock,
 };
 
 type Synced<T> = Arc<RwLock<T>>;
+
+trait ThreadSafe: Send + Sync + 'static {}
+impl<T> ThreadSafe for T where T: Send + Sync + 'static {}
 
 fn main() -> Result<()> {
     dotenv::dotenv().ok();
@@ -37,28 +39,14 @@ fn env_var(name: &str) -> Result<String> {
 }
 
 async fn async_main() -> Result<()> {
-    let discord_token = env_var("DISCORD_TOKEN")?;
-
-    Client::builder(&discord_token)
-        .event_handler(DiscordEventHandler)
-        .await
-        .context("Failed to create Discord Client")?
-        .start()
-        .await
-        .context("Client Error")?;
+    let token = env_var("DISCORD_TOKEN")?;
+    crate::client::discord::DiscordClient::new(&token)
+        .add_service(
+            crate::bot::alias::MessageAliasBot::new(),
+            Arc::new(RwLock::new(crate::db::mem::MemoryDB::new())),
+        )
+        .run()
+        .await?;
 
     Ok(())
-}
-
-struct DiscordEventHandler;
-
-#[async_trait]
-impl EventHandler for DiscordEventHandler {
-    async fn ready(&self, _: Context, ready: Ready) {
-        tracing::info!("DiscordBot({}) is connected!", ready.user.name);
-    }
-
-    async fn message(&self, _: Context, _: Message) {
-        todo!("message handler");
-    }
 }

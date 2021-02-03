@@ -29,6 +29,8 @@ impl MongoDB {
     }
 }
 
+const MESSAGE_ALIAS_COLLECTION_NAME: &str = "MessageAlias";
+
 #[async_trait]
 impl MessageAliasDatabase for MongoDB {
     async fn save(&mut self, key: &str, message: &str) -> Result<()> {
@@ -36,7 +38,7 @@ impl MessageAliasDatabase for MongoDB {
         let doc = bson::to_document(&alias).context("failed to serialize alias")?;
 
         self.inner
-            .collection("MessageAlias")
+            .collection(MESSAGE_ALIAS_COLLECTION_NAME)
             .insert_one(doc, None)
             .await
             .context("failed to insert new alias")?;
@@ -46,7 +48,7 @@ impl MessageAliasDatabase for MongoDB {
 
     async fn get(&self, key: &str) -> Result<Option<String>> {
         self.inner
-            .collection("MessageAlias")
+            .collection(MESSAGE_ALIAS_COLLECTION_NAME)
             .find_one(doc! { "key": key }, None)
             .await
             .context("failed to fetch alias")?
@@ -58,7 +60,7 @@ impl MessageAliasDatabase for MongoDB {
 
     async fn len(&self) -> Result<u32> {
         self.inner
-            .collection("MessageAlias")
+            .collection(MESSAGE_ALIAS_COLLECTION_NAME)
             .aggregate(vec![doc! { "$count": "key" }], None)
             .await
             .context("failed to aggregate")?
@@ -71,5 +73,14 @@ impl MessageAliasDatabase for MongoDB {
             .as_i32()
             .context("aggregation result's key property was not i32")
             .map(|x| x as u32)
+    }
+
+    async fn delete(&mut self, key: &str) -> Result<bool> {
+        self.inner
+            .collection(MESSAGE_ALIAS_COLLECTION_NAME)
+            .delete_one(doc! { "key": key }, None)
+            .await
+            .context("failed to delete alias")
+            .map(|x| x.deleted_count == 1)
     }
 }
