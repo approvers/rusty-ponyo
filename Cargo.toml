@@ -11,12 +11,13 @@ anyhow = "1.0.38"
 async-trait = "0.1.42"
 dotenv = "0.15.0"
 mongodb = "1.1.1"
-serde = "1.0.119"
-tokio = "0.2"
+serde = "1.0.123"
+tokio = { version = "1.1.1", features=["rt-multi-thread"] }
+tokio-stream = "0.1.2"
 tracing = "0.1.22"
 tracing-subscriber = "0.2.15"
 
 [dependencies.serenity]
-version = "0.9"
+version = "0.10.2"
 default-features = false
 features = ["rustls_backend", "cache", "client", "gateway", "model"]

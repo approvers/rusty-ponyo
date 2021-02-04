@@ -8,7 +8,7 @@ use {
         options::ClientOptions,
         Client, Database,
     },
-    tokio::stream::StreamExt,
+    tokio_stream::StreamExt,
 };
 
 pub(crate) struct MongoDB {
