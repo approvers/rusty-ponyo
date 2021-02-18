@@ -1,0 +1,15 @@
+[package]
+name = "parser"
+version = "0.1.0"
+authors = ["kawaemon <34652535+kawaemon@users.noreply.github.com>"]
+edition = "2018"
+
+[dependencies]
+libc = "0.2.86"
+
+
+[lib]
+crate-type = ["staticlib"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
