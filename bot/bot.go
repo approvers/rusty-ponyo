@@ -1,14 +1,14 @@
 package bot
 
 type Message interface {
-    Content() string
-    IsBot() bool
+	Content() string
+	IsBot() bool
 }
 
 type Context interface {
-    SendMessage(string)
+	SendMessage(string)
 }
 
 type Bot interface {
-    OnMessage(Message, Context)
+	OnMessage(Message, Context)
 }

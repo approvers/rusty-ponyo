@@ -8,7 +8,7 @@ import (
 type messageAliasBot struct{}
 
 func NewMessageAliasBot() *messageAliasBot {
-	return &messageAliasBot {}
+	return &messageAliasBot{}
 }
 
 func (b *messageAliasBot) OnMessage(msg bot.Message, ctx bot.Context) {
@@ -19,11 +19,11 @@ func (b *messageAliasBot) OnMessage(msg bot.Message, ctx bot.Context) {
 	content := msg.Content()
 	parsed := parse(content)
 
-    switch parsed.kind {
-    case noMatch:
-    case parseError:
-        ctx.SendMessage(parsed.errorMsg)
-    }
+	switch parsed.kind {
+	case noMatch:
+	case parseError:
+		ctx.SendMessage(parsed.errorMsg)
+	}
 
 	fmt.Printf("%#v\n", parsed)
 }
