@@ -1,12 +1,13 @@
 package discord
 
 import (
-	"github.com/approvers/rusty-ponyo/bot"
-	"github.com/bwmarrin/discordgo"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/approvers/rusty-ponyo/bot"
+	"github.com/bwmarrin/discordgo"
 )
 
 type DiscordClient struct {

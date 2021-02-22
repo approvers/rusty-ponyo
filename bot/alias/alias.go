@@ -4,10 +4,19 @@ import (
 	"github.com/approvers/rusty-ponyo/bot"
 )
 
-type messageAliasBot struct{}
+type MessageAliasDatabase interface {
+	SaveMessageAlias(alias MessageAlias)
+	GetMessageAlias(key string) MessageAlias
+	DeleteMessageAlias(key string) bool
+	ListMessageAlias(offset, limit int) []MessageAlias
+}
 
-func NewMessageAliasBot() *messageAliasBot {
-	return &messageAliasBot{}
+type messageAliasBot struct {
+	db MessageAliasDatabase
+}
+
+func NewMessageAliasBot(db MessageAliasDatabase) *messageAliasBot {
+	return &messageAliasBot{db}
 }
 
 func (b *messageAliasBot) OnMessage(msg bot.Message, ctx bot.Context) {
