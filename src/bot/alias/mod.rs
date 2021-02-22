@@ -2,8 +2,12 @@ mod commands;
 mod parser;
 
 use {
-    crate::{bot::BotService, db::MessageAliasDatabase, Synced},
-    anyhow::{Result},
+    crate::{
+        bot::{BotService, Message},
+        db::MessageAliasDatabase,
+        Synced,
+    },
+    anyhow::Result,
     std::marker::PhantomData,
 };
 
@@ -15,13 +19,17 @@ pub(crate) struct MessageAliasBot<D: MessageAliasDatabase>(PhantomData<fn() -> D
 impl<D: MessageAliasDatabase> BotService for MessageAliasBot<D> {
     type Database = D;
 
-    async fn on_message(&self, db: &Synced<Self::Database>, msg: &str) -> Result<Option<String>> {
+    async fn on_message(
+        &self,
+        db: &Synced<Self::Database>,
+        msg: &dyn Message,
+    ) -> Result<Option<String>> {
         // TODO: support commandAdd?
-        if msg.starts_with(PREFIX) {
+        if msg.content().starts_with(PREFIX) {
             return self.on_command(db, msg).await;
         }
 
-        let fetched = db.read().await.get(msg).await?;
+        let fetched = db.read().await.get(msg.content()).await?;
 
         if let Some(msg) = fetched {
             return Ok(Some(msg));
@@ -36,10 +44,10 @@ impl<D: MessageAliasDatabase> MessageAliasBot<D> {
         Self(PhantomData)
     }
 
-    async fn on_command(&self, db: &Synced<D>, message: &str) -> Result<Option<String>> {
+    async fn on_command(&self, db: &Synced<D>, message: &dyn Message) -> Result<Option<String>> {
         use commands::*;
 
-        let parsed = match parser::parse(message) {
+        let parsed = match parser::parse(message.content()) {
             Ok(Some(p)) => p,
             // syntax error
             Err(e) => return Ok(Some(e)),

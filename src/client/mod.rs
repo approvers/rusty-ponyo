@@ -2,7 +2,10 @@ pub mod console;
 pub mod discord;
 
 use {
-    crate::{bot::BotService, Synced, ThreadSafe},
+    crate::{
+        bot::{BotService, Message},
+        Synced, ThreadSafe,
+    },
     anyhow::Result,
     async_trait::async_trait,
 };
@@ -14,7 +17,7 @@ struct ServiceEntryInner<S, D> {
 
 #[async_trait]
 trait ServiceEntry: ThreadSafe {
-    async fn on_message(&self, msg: &str) -> Result<Option<String>>;
+    async fn on_message(&self, msg: &dyn Message) -> Result<Option<String>>;
 }
 
 #[async_trait]
@@ -23,7 +26,7 @@ where
     S: BotService<Database = D>,
     D: ThreadSafe,
 {
-    async fn on_message(&self, msg: &str) -> Result<Option<String>> {
+    async fn on_message(&self, msg: &dyn Message) -> Result<Option<String>> {
         self.service.on_message(&self.db, msg).await
     }
 }

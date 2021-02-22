@@ -1,7 +1,7 @@
 use {
     crate::{
         bot::BotService,
-        client::{ServiceEntry, ServiceEntryInner},
+        client::{Message, ServiceEntry, ServiceEntryInner},
         Synced, ThreadSafe,
     },
     anyhow::Result,
@@ -37,15 +37,27 @@ impl ConsoleClient {
                 stdin().read_line(&mut buf).unwrap();
             });
 
+            let message = ConsoleMessage { content: buf };
+
             for service in &self.services {
-                match service.on_message(buf.trim()).await {
+                match service.on_message(&message).await {
                     Ok(Some(t)) => println!("{}", t),
                     Err(e) => println!("{:?}", e),
                     _ => {}
                 };
             }
 
-            buf.clear();
+            buf = String::new();
         }
+    }
+}
+
+struct ConsoleMessage {
+    content: String,
+}
+
+impl Message for ConsoleMessage {
+    fn content(&self) -> &str {
+        &self.content
     }
 }

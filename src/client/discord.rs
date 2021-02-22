@@ -1,28 +1,24 @@
 use {
     crate::{
         bot::BotService,
-        client::{ServiceEntry, ServiceEntryInner},
+        client::{Message, ServiceEntry, ServiceEntryInner},
         Synced, ThreadSafe,
     },
     anyhow::{Context as _, Result},
     async_trait::async_trait,
     serenity::{
-        model::{channel::Message, gateway::Ready},
+        model::{channel::Message as SerenityMessage, gateway::Ready},
         prelude::{Client, Context as SerenityContext, EventHandler},
     },
 };
 
-pub(crate) struct DiscordClient<'token> {
+pub(crate) struct DiscordClient {
     services: Vec<Box<dyn ServiceEntry>>,
-    token: &'token str,
 }
 
-impl<'token> DiscordClient<'token> {
-    pub fn new(token: &'token str) -> Self {
-        Self {
-            services: vec![],
-            token,
-        }
+impl DiscordClient {
+    pub fn new() -> Self {
+        Self { services: vec![] }
     }
 
     pub fn add_service<S, D>(mut self, service: S, db: Synced<D>) -> Self
@@ -35,12 +31,12 @@ impl<'token> DiscordClient<'token> {
         self
     }
 
-    pub async fn run(self) -> Result<()> {
+    pub async fn run(self, token: &str) -> Result<()> {
         let event_handler = EvHandler {
             services: self.services,
         };
 
-        Client::builder(self.token)
+        Client::builder(token)
             .event_handler(event_handler)
             .await
             .context("Failed to create Discord client")?
@@ -60,24 +56,36 @@ impl EventHandler for EvHandler {
         tracing::info!("DiscordBot({}) is connected!", ready.user.name);
     }
 
-    async fn message(&self, ctx: SerenityContext, message: Message) {
+    async fn message(&self, ctx: SerenityContext, message: SerenityMessage) {
+        let message = DiscordMessage { origin: message };
+
         for service in &self.services {
-            let result = service.on_message(&message.content).await;
+            let result = service.on_message(&message).await;
 
             match result {
                 Err(err) => tracing::error!(
                     "Error occur while running command '{}'\n{:?}",
-                    message.content,
+                    &message.origin.content,
                     err
                 ),
 
                 Ok(Some(text)) => {
-                    if let Err(e) = message.channel_id.say(&ctx.http, &text).await {
+                    if let Err(e) = message.origin.channel_id.say(&ctx.http, &text).await {
                         tracing::error!("Error occur while sending message {:?},'{}'", e, text);
                     }
                 }
                 _ => {}
             }
         }
+    }
+}
+
+struct DiscordMessage {
+    origin: SerenityMessage,
+}
+
+impl Message for DiscordMessage {
+    fn content(&self) -> &str {
+        &self.origin.content
     }
 }

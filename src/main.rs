@@ -39,12 +39,12 @@ fn env_var(name: &str) -> Result<String> {
 
 async fn async_main() -> Result<()> {
     let token = env_var("DISCORD_TOKEN")?;
-    crate::client::discord::DiscordClient::new(&token)
+    crate::client::discord::DiscordClient::new()
         .add_service(
             crate::bot::alias::MessageAliasBot::new(),
             Arc::new(RwLock::new(crate::db::mem::MemoryDB::new())),
         )
-        .run()
+        .run(&token)
         .await?;
 
     Ok(())
