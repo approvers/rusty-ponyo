@@ -1,7 +1,7 @@
 use {
     crate::{
-        bot::BotService,
-        client::{Message, ServiceEntry, ServiceEntryInner},
+        bot::{Attachment, BotService, Message},
+        client::{ServiceEntry, ServiceEntryInner},
         Synced, ThreadSafe,
     },
     anyhow::{Context as _, Result},
@@ -87,5 +87,9 @@ struct DiscordMessage {
 impl Message for DiscordMessage {
     fn content(&self) -> &str {
         &self.origin.content
+    }
+
+    fn attachments(&self) -> &[&dyn Attachment] {
+        &[]
     }
 }

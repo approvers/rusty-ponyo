@@ -1,10 +1,11 @@
 use {
     crate::{
-        bot::BotService,
-        client::{Message, ServiceEntry, ServiceEntryInner},
+        bot::{Attachment, BotService, Message},
+        client::{ServiceEntry, ServiceEntryInner},
         Synced, ThreadSafe,
     },
     anyhow::Result,
+    async_trait::async_trait,
     std::io::{stdin, stdout, Write},
 };
 
@@ -47,7 +48,8 @@ impl ConsoleClient {
                 };
             }
 
-            buf = String::new();
+            buf = message.content;
+            buf.clear();
         }
     }
 }
@@ -59,5 +61,20 @@ struct ConsoleMessage {
 impl Message for ConsoleMessage {
     fn content(&self) -> &str {
         &self.content
+    }
+
+    fn attachments(&self) -> &[&dyn Attachment] {
+        &[]
+    }
+}
+
+struct ConsoleAttachment {
+    data: Vec<u8>,
+}
+
+#[async_trait]
+impl Attachment for ConsoleAttachment {
+    async fn download(&self) -> Result<Vec<u8>> {
+        Ok(self.data.clone())
     }
 }

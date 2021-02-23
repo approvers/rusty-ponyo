@@ -1,12 +1,11 @@
-use {crate::db::MessageAliasDatabase, anyhow::Result, async_trait::async_trait};
-
-struct AliasEntry {
-    key: String,
-    value: String,
-}
+use {
+    crate::{db::MessageAliasDatabase, model::MessageAlias},
+    anyhow::Result,
+    async_trait::async_trait,
+};
 
 pub(crate) struct MemoryDB {
-    inner: Vec<AliasEntry>,
+    inner: Vec<MessageAlias>,
 }
 
 impl MemoryDB {
@@ -17,17 +16,14 @@ impl MemoryDB {
 
 #[async_trait]
 impl MessageAliasDatabase for MemoryDB {
-    async fn save(&mut self, key: &str, msg: &str) -> Result<()> {
-        self.inner.push(AliasEntry {
-            key: key.into(),
-            value: msg.into(),
-        });
+    async fn save(&mut self, alias: MessageAlias) -> Result<()> {
+        self.inner.push(alias);
         Ok(())
     }
 
-    async fn get(&self, key: &str) -> Result<Option<String>> {
+    async fn get(&self, key: &str) -> Result<Option<MessageAlias>> {
         if let Some(e) = self.inner.iter().find(|x| x.key == key) {
-            return Ok(Some(e.value.clone()));
+            return Ok(Some(e.clone()));
         }
 
         Ok(None)

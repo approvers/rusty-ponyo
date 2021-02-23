@@ -1,5 +1,7 @@
+use chrono::Utc;
+
 use {
-    crate::{db::MessageAliasDatabase, Synced},
+    crate::{db::MessageAliasDatabase, model::MessageAlias, Synced},
     anyhow::{Context as _, Result},
 };
 
@@ -49,9 +51,16 @@ pub(super) async fn make(
         return Ok(error_msgs.join("\n"));
     }
 
+    let entry = MessageAlias {
+        key: key.into(),
+        message: msg.into(),
+        attachments: None, // TODO: implement
+        created_at: Utc::now(),
+    };
+
     db.write()
         .await
-        .save(key, msg)
+        .save(entry)
         .await
         .context("failed to save new alias")?;
 

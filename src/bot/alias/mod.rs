@@ -32,7 +32,7 @@ impl<D: MessageAliasDatabase> BotService for MessageAliasBot<D> {
         let fetched = db.read().await.get(msg.content()).await?;
 
         if let Some(msg) = fetched {
-            return Ok(Some(msg));
+            return Ok(Some(msg.message));
         }
 
         Ok(None)
