@@ -13,8 +13,8 @@ use {
 
 type Synced<T> = Arc<RwLock<T>>;
 
-trait ThreadSafe: Send + Sync + 'static {}
-impl<T> ThreadSafe for T where T: Send + Sync + 'static {}
+trait ThreadSafe: Send + Sync {}
+impl<T> ThreadSafe for T where T: Send + Sync {}
 
 fn main() -> Result<()> {
     dotenv::dotenv().ok();

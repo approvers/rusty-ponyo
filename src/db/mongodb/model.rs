@@ -8,7 +8,7 @@ use {
 pub(super) struct MongoMessageAlias {
     pub(super) key: String,
     pub(super) message: String,
-    pub(super) attachments: Option<Vec<MongoMessageAliasAttachment>>,
+    pub(super) attachments: Vec<MongoMessageAliasAttachment>,
     pub(crate) created_at: DateTime,
 }
 
@@ -18,9 +18,7 @@ impl From<MessageAlias> for MongoMessageAlias {
             key: origin.key,
             message: origin.message,
             created_at: origin.created_at.into(),
-            attachments: origin
-                .attachments
-                .map(|x| x.into_iter().map(|x| x.into()).collect()),
+            attachments: origin.attachments.into_iter().map(|x| x.into()).collect(),
         }
     }
 }
@@ -31,9 +29,7 @@ impl Into<MessageAlias> for MongoMessageAlias {
             key: self.key,
             message: self.message,
             created_at: self.created_at.into(),
-            attachments: self
-                .attachments
-                .map(|x| x.into_iter().map(|x| x.into()).collect()),
+            attachments: self.attachments.into_iter().map(|x| x.into()).collect(),
         }
     }
 }

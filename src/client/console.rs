@@ -20,8 +20,8 @@ impl ConsoleClient {
 
     pub fn add_service<S, D>(mut self, service: S, db: Synced<D>) -> Self
     where
-        S: BotService<Database = D>,
-        D: ThreadSafe,
+        S: BotService<Database = D> + 'static,
+        D: ThreadSafe + 'static,
     {
         self.services
             .push(Box::new(ServiceEntryInner { service, db }));
@@ -64,16 +64,21 @@ impl Message for ConsoleMessage {
     }
 
     fn attachments(&self) -> &[&dyn Attachment] {
-        &[]
+        &[] // TODO: support this
     }
 }
 
 struct ConsoleAttachment {
+    name: String,
     data: Vec<u8>,
 }
 
 #[async_trait]
 impl Attachment for ConsoleAttachment {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
     async fn download(&self) -> Result<Vec<u8>> {
         Ok(self.data.clone())
     }

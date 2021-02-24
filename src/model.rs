@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 pub(crate) struct MessageAlias {
     pub(crate) key: String,
     pub(crate) message: String,
-    pub(crate) attachments: Option<Vec<MessageAliasAttachment>>,
+    pub(crate) attachments: Vec<MessageAliasAttachment>,
     pub(crate) created_at: DateTime<Utc>,
 }
 

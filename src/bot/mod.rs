@@ -12,6 +12,7 @@ pub(crate) trait Message: ThreadSafe {
 
 #[async_trait]
 pub(crate) trait Attachment: ThreadSafe {
+    fn name(&self) -> &str;
     async fn download(&self) -> Result<Vec<u8>>;
 }
 

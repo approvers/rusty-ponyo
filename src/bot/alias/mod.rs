@@ -76,7 +76,7 @@ impl<D: MessageAliasDatabase> MessageAliasBot<D> {
                 let value = parsed.args.get(1);
 
                 if let (Some(key), Some(value)) = (key, value) {
-                    return make(db, key, value).await.map(Some);
+                    return make(db, key, value, message.attachments()).await.map(Some);
                 }
 
                 return Ok(Some(help()));

@@ -6,8 +6,12 @@ use {
     },
     anyhow::{Context as _, Result},
     async_trait::async_trait,
+    parking_lot::Mutex,
     serenity::{
-        model::{channel::Message as SerenityMessage, gateway::Ready},
+        model::{
+            channel::{Attachment as SerenityAttachment, Message as SerenityMessage},
+            gateway::Ready,
+        },
         prelude::{Client, Context as SerenityContext, EventHandler},
     },
 };
@@ -23,8 +27,8 @@ impl DiscordClient {
 
     pub fn add_service<S, D>(mut self, service: S, db: Synced<D>) -> Self
     where
-        S: BotService<Database = D>,
-        D: ThreadSafe,
+        S: BotService<Database = D> + 'static,
+        D: ThreadSafe + 'static,
     {
         self.services
             .push(Box::new(ServiceEntryInner { service, db }));
@@ -57,20 +61,29 @@ impl EventHandler for EvHandler {
     }
 
     async fn message(&self, ctx: SerenityContext, message: SerenityMessage) {
-        let message = DiscordMessage { origin: message };
+        let converted_attachments = message
+            .attachments
+            .into_iter()
+            .map(DiscordAttachment)
+            .collect::<Vec<_>>();
+
+        let converted_message = DiscordMessage {
+            content: message.content.clone(),
+            attachments: converted_attachments.iter().map(|x| x as _).collect(),
+        };
 
         for service in &self.services {
-            let result = service.on_message(&message).await;
+            let result = service.on_message(&converted_message).await;
 
             match result {
                 Err(err) => tracing::error!(
                     "Error occur while running command '{}'\n{:?}",
-                    &message.origin.content,
+                    &message.content,
                     err
                 ),
 
                 Ok(Some(text)) => {
-                    if let Err(e) = message.origin.channel_id.say(&ctx.http, &text).await {
+                    if let Err(e) = message.channel_id.say(&ctx.http, &text).await {
                         tracing::error!("Error occur while sending message {:?},'{}'", e, text);
                     }
                 }
@@ -80,16 +93,33 @@ impl EventHandler for EvHandler {
     }
 }
 
-struct DiscordMessage {
-    origin: SerenityMessage,
+struct DiscordMessage<'a> {
+    content: String,
+    attachments: Vec<&'a dyn Attachment>,
 }
 
-impl Message for DiscordMessage {
+impl Message for DiscordMessage<'_> {
     fn content(&self) -> &str {
-        &self.origin.content
+        &self.content
     }
 
     fn attachments(&self) -> &[&dyn Attachment] {
-        &[]
+        &self.attachments
+    }
+}
+
+struct DiscordAttachment(SerenityAttachment);
+
+#[async_trait]
+impl Attachment for DiscordAttachment {
+    fn name(&self) -> &str {
+        &self.0.filename
+    }
+
+    async fn download(&self) -> Result<Vec<u8>> {
+        self.0
+            .download()
+            .await
+            .context("failed to download attachment from discord")
     }
 }
