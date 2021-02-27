@@ -3,7 +3,6 @@
 mod bot;
 mod client;
 mod db;
-mod model;
 
 use {
     crate::bot::alias::MessageAliasBot,

@@ -1,5 +1,5 @@
 use {
-    crate::model::{MessageAlias, MessageAliasAttachment},
+    crate::bot::alias::model::{MessageAlias, MessageAliasAttachment},
     mongodb::bson::{spec::BinarySubtype, Binary, DateTime},
     serde::{Deserialize, Serialize},
 };

@@ -27,7 +27,7 @@ enum ParseState {
     },
 }
 
-pub(super) fn parse<'a>(text: &'a str) -> Result<Option<Sentence<'a>>, String> {
+pub(super) fn parse(text: &str) -> Result<Option<Sentence<'_>>, String> {
     use ParseState::*;
 
     let chars = text.char_indices().collect::<Vec<_>>();
@@ -133,7 +133,7 @@ pub(super) fn parse<'a>(text: &'a str) -> Result<Option<Sentence<'a>>, String> {
                     return Err(format_error(
                         text,
                         (chars_index - 1)..chars_index,
-                        &format!("This escape sequence is not supported."),
+                        "This escape sequence is not supported.",
                         None,
                     ));
                 }

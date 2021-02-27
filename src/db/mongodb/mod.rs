@@ -2,8 +2,8 @@ mod model;
 
 use {
     crate::{
-        db::{mongodb::model::MongoMessageAlias, MessageAliasDatabase},
-        model::MessageAlias,
+        bot::alias::{model::MessageAlias, MessageAliasDatabase},
+        db::mongodb::model::MongoMessageAlias,
     },
     anyhow::{Context as _, Result},
     async_trait::async_trait,

@@ -1,13 +1,16 @@
-use chrono::Utc;
-
 use {
     crate::{
-        bot::Attachment,
-        db::MessageAliasDatabase,
-        model::{MessageAlias, MessageAliasAttachment},
+        bot::{
+            alias::{
+                model::{MessageAlias, MessageAliasAttachment},
+                MessageAliasDatabase,
+            },
+            Attachment,
+        },
         Synced,
     },
     anyhow::{Context as _, Result},
+    chrono::Utc,
 };
 
 #[rustfmt::skip]
@@ -48,13 +51,11 @@ pub(super) async fn make(
     let msg_len = msg.chars().count();
 
     if key.is_empty() {
-        error_msgs.push(format!("キーが空白です。"));
+        error_msgs.push("キーが空白です。".to_string());
     }
 
     if attachments.is_empty() && msg.is_empty() {
-        error_msgs.push(format!(
-            "メッセージもしくは添付ファイルのどちらかは必ず必要です。"
-        ))
+        error_msgs.push("メッセージもしくは添付ファイルのどちらかは必ず必要です。".to_string());
     }
 
     if attachments.len() > ATTACHMENTS_MAX_COUNT {
