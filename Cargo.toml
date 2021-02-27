@@ -1,5 +1,5 @@
 [package]
-name = "message-alias-bot"
+name = "rusty-ponyo"
 version = "0.1.0"
 authors = ["kawaemon <34652535+kawaemon@users.noreply.github.com>"]
 edition = "2018"
@@ -42,3 +42,7 @@ features = ["rt-multi-thread", "parking_lot"]
 [dependencies.mongodb]
 version = "2.0.0-alpha"
 optional = true
+
+[profile.release]
+lto = true
+codegen-units = 1

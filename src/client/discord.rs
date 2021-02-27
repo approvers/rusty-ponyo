@@ -62,6 +62,10 @@ impl EventHandler for EvHandler {
     }
 
     async fn message(&self, ctx: SerenityContext, message: SerenityMessage) {
+        if message.author.bot {
+            return;
+        }
+
         let converted_attachments = message
             .attachments
             .into_iter()

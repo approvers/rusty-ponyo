@@ -1,0 +1,21 @@
+version: "3.8"
+services:
+    db:
+        image: mongo:4.4.4-bionic
+        restart: unless-stopped
+        environment:
+            MONGO_INITDB_ROOT_USERNAME: root
+            MONGO_INITDB_ROOT_PASSWORD: root_pass
+        volumes:
+            - ./db:/data/db
+            - ./db_config:/data/configdb
+
+    rusty-ponyo:
+        build: .
+        restart: unless-stopped
+        depends_on:
+            - db
+        environment:
+            DISCORD_TOKEN: ${DISCORD_TOKEN}
+            MONGODB_URI: "mongodb://root:root_pass@db"
+            RUST_LOG: info

@@ -7,7 +7,7 @@ use {
 pub(super) struct Sentence<'a> {
     pub(super) prefix: &'a str,
     pub(super) sub_command: Option<&'a str>,
-    pub(super) args: Vec<&'a str>,
+    pub(super) args: Vec<String>,
 }
 
 enum ParseState {
@@ -22,7 +22,8 @@ enum ParseState {
     },
     BeforeString,
     InString {
-        begin: usize,
+        buffer: String,
+        was_before_backslash: bool,
     },
 }
 
@@ -97,28 +98,65 @@ pub(super) fn parse<'a>(text: &'a str) -> Result<Option<Sentence<'a>>, String> {
             BeforeString => match ch {
                 '"' => {
                     state = InString {
-                        begin: index + '"'.len_utf8(),
+                        buffer: String::new(),
+                        was_before_backslash: false,
                     }
                 }
 
                 c if c.is_whitespace() => {}
 
                 c => {
-                    let index = chars_index as usize;
                     return Err(format_error(
                         text,
-                        index..index,
+                        chars_index..chars_index,
                         &format!(r#"Expected '"', but found '{}'"#, c),
                         Some("You probably forgot to quote string argument."),
                     ));
                 }
             },
 
-            InString { begin } => {
-                if ch == '"' {
-                    args.push(&text[begin..index]);
-                    state = BeforeString;
+            InString {
+                mut buffer,
+                was_before_backslash,
+            } => {
+                if was_before_backslash {
+                    if ch == '"' {
+                        buffer.push('"');
+                        state = InString {
+                            buffer,
+                            was_before_backslash: false,
+                        };
+
+                        continue;
+                    }
+
+                    return Err(format_error(
+                        text,
+                        (chars_index - 1)..chars_index,
+                        &format!("This escape sequence is not supported."),
+                        None,
+                    ));
                 }
+
+                if ch == '\\' {
+                    state = InString {
+                        buffer,
+                        was_before_backslash: true,
+                    };
+                    continue;
+                }
+
+                if ch == '"' {
+                    args.push(buffer);
+                    state = BeforeString;
+                    continue;
+                }
+
+                buffer.push(ch);
+                state = InString {
+                    buffer,
+                    was_before_backslash,
+                };
             }
         }
     }
@@ -139,7 +177,7 @@ pub(super) fn parse<'a>(text: &'a str) -> Result<Option<Sentence<'a>>, String> {
         InString { .. } => {
             return Err(format_error(
                 text,
-                index..index,
+                chars_index..chars_index,
                 "Unexpected end of text while parsing String argument",
                 Some("You probably forgot to put double quote at the end."),
             ));
@@ -153,15 +191,29 @@ pub(super) fn parse<'a>(text: &'a str) -> Result<Option<Sentence<'a>>, String> {
     }))
 }
 
-fn format_error(origin: &str, pos: Range<usize>, error_msg: &str, hint: Option<&str>) -> String {
-    let marker = Some(' ')
-        .iter()
-        .cycle()
-        .take(pos.start)
-        .chain(Some('^').iter().cycle().take(pos.end - pos.start + 1))
-        .collect::<String>();
+fn format_error(origin: &str, pos: Range<isize>, error_msg: &str, hint: Option<&str>) -> String {
+    let mut result = format!(
+        "```\nParsing Error(at {}-{}): {}\n{}",
+        pos.start, pos.end, error_msg, origin
+    );
 
-    let mut result = format!("```\nParsing Error: {}\n{}\n{}", error_msg, origin, marker);
+    // 全角文字ではマーカーがどうしてもずれるので表示しない
+    if origin.chars().all(|x| x.is_ascii()) {
+        let marker = Some(' ')
+            .iter()
+            .cycle()
+            .take(pos.start as usize)
+            .chain(
+                Some('^')
+                    .iter()
+                    .cycle()
+                    .take(pos.end as usize - pos.start as usize + 1),
+            )
+            .collect::<String>();
+
+        result.push('\n');
+        result.push_str(&marker);
+    }
 
     if let Some(hint) = hint {
         const HINT_PREFIX: &str = "\nhint: ";

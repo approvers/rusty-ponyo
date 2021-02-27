@@ -788,25 +788,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ee1c47aaa256ecabcaea351eae4a9b01ef39ed810004e298d2511ed284b1525"
 
 [[package]]
-name = "message-alias-bot"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "cfg-if",
- "chrono",
- "dotenv",
- "mongodb",
- "parking_lot",
- "serde",
- "serenity",
- "tokio",
- "tokio-stream",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "mime"
 version = "0.3.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1311,6 +1292,25 @@ name = "rustversion"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb5d2a036dc6d2d8fd16fde3498b04306e29bd193bf306a57427019b823d5acd"
+
+[[package]]
+name = "rusty-ponyo"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "cfg-if",
+ "chrono",
+ "dotenv",
+ "mongodb",
+ "parking_lot",
+ "serde",
+ "serenity",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "ryu"

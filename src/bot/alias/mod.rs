@@ -93,9 +93,9 @@ impl<D: MessageAliasDatabase> MessageAliasBot<D> {
 
             "make" => {
                 let key = parsed.args.get(0);
-                let value = parsed.args.get(1);
+                let value = parsed.args.get(1).map(|x| x.as_str());
 
-                if let (Some(key), Some(value)) = (key, value) {
+                if let Some(key) = key {
                     return make(db, key, value, message.attachments()).await.map(Some);
                 }
 

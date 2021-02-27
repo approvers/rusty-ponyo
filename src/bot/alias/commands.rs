@@ -32,9 +32,12 @@ const ATTACHMENTS_MAX_COUNT: usize = 1;
 pub(super) async fn make(
     db: &Synced<impl MessageAliasDatabase>,
     key: &str,
-    msg: &str,
+    msg: Option<&str>,
     attachments: &[&dyn Attachment],
 ) -> Result<String> {
+    let key = key.trim();
+    let msg = msg.unwrap_or("").trim();
+
     if db.read().await.get(key).await?.is_some() {
         return Ok("すでにそのキーにはエイリアスが登録されています。上書きしたい場合は先に削除してください。".to_string());
     }
@@ -43,6 +46,24 @@ pub(super) async fn make(
 
     let key_len = key.chars().count();
     let msg_len = msg.chars().count();
+
+    if key.is_empty() {
+        error_msgs.push(format!("キーが空白です。"));
+    }
+
+    if attachments.is_empty() && msg.is_empty() {
+        error_msgs.push(format!(
+            "メッセージもしくは添付ファイルのどちらかは必ず必要です。"
+        ))
+    }
+
+    if attachments.len() > ATTACHMENTS_MAX_COUNT {
+        error_msgs.push(format!(
+            "添付ファイル数が多すぎます({}ファイル)。{}ファイル以下にしてください。",
+            attachments.len(),
+            ATTACHMENTS_MAX_COUNT,
+        ));
+    }
 
     if key_len > KEY_LENGTH_LIMIT {
         error_msgs.push(format!(
@@ -60,14 +81,6 @@ pub(super) async fn make(
 
     if !error_msgs.is_empty() {
         return Ok(error_msgs.join("\n"));
-    }
-
-    if attachments.len() > ATTACHMENTS_MAX_COUNT {
-        return Ok(format!(
-            "添付ファイル数が多すぎます({}ファイル)。{}ファイル以下にしてください。",
-            attachments.len(),
-            ATTACHMENTS_MAX_COUNT,
-        ));
     }
 
     // we cannot use iter().mao() because download method is async function.

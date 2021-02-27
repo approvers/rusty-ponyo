@@ -1,1 +1,4 @@
 /target
+.env
+/db/
+/db_config/
