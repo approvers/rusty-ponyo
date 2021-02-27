@@ -1,9 +1,12 @@
+#[cfg(feature = "console_client")]
 pub mod console;
+
+#[cfg(feature = "discord_client")]
 pub mod discord;
 
 use {
     crate::{
-        bot::{BotService, Message},
+        bot::{BotService, Context, Message},
         Synced, ThreadSafe,
     },
     anyhow::Result,
@@ -17,7 +20,8 @@ struct ServiceEntryInner<S, D> {
 
 #[async_trait]
 trait ServiceEntry: ThreadSafe {
-    async fn on_message(&self, msg: &dyn Message) -> Result<Option<String>>;
+    fn name(&self) -> &'static str;
+    async fn on_message(&self, msg: &dyn Message, ctx: &dyn Context) -> Result<()>;
 }
 
 #[async_trait]
@@ -26,7 +30,12 @@ where
     S: BotService<Database = D>,
     D: ThreadSafe,
 {
-    async fn on_message(&self, msg: &dyn Message) -> Result<Option<String>> {
-        self.service.on_message(&self.db, msg).await
+    #[inline]
+    fn name(&self) -> &'static str {
+        S::NAME
+    }
+
+    async fn on_message(&self, msg: &dyn Message, ctx: &dyn Context) -> Result<()> {
+        self.service.on_message(&self.db, msg, ctx).await
     }
 }

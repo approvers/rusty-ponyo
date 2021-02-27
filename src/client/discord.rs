@@ -1,16 +1,17 @@
 use {
     crate::{
-        bot::{Attachment, BotService, Message},
+        bot::{Attachment, BotService, Context, Message, SendMessage},
         client::{ServiceEntry, ServiceEntryInner},
         Synced, ThreadSafe,
     },
     anyhow::{Context as _, Result},
     async_trait::async_trait,
-    parking_lot::Mutex,
     serenity::{
+        http::AttachmentType,
         model::{
             channel::{Attachment as SerenityAttachment, Message as SerenityMessage},
             gateway::Ready,
+            id::ChannelId as SerenityChannelId,
         },
         prelude::{Client, Context as SerenityContext, EventHandler},
     },
@@ -72,22 +73,22 @@ impl EventHandler for EvHandler {
             attachments: converted_attachments.iter().map(|x| x as _).collect(),
         };
 
-        for service in &self.services {
-            let result = service.on_message(&converted_message).await;
+        let converted_context = DiscordContext {
+            origin: ctx,
+            channel_id: message.channel_id,
+        };
 
-            match result {
-                Err(err) => tracing::error!(
+        for service in &self.services {
+            let result = service
+                .on_message(&converted_message, &converted_context)
+                .await;
+
+            if let Err(err) = result {
+                tracing::error!(
                     "Error occur while running command '{}'\n{:?}",
                     &message.content,
                     err
-                ),
-
-                Ok(Some(text)) => {
-                    if let Err(e) = message.channel_id.say(&ctx.http, &text).await {
-                        tracing::error!("Error occur while sending message {:?},'{}'", e, text);
-                    }
-                }
-                _ => {}
+                );
             }
         }
     }
@@ -121,5 +122,32 @@ impl Attachment for DiscordAttachment {
             .download()
             .await
             .context("failed to download attachment from discord")
+    }
+}
+
+struct DiscordContext {
+    origin: SerenityContext,
+    channel_id: SerenityChannelId,
+}
+
+#[async_trait]
+impl Context for DiscordContext {
+    async fn send_message(&self, msg: SendMessage<'_>) -> Result<()> {
+        #[rustfmt::skip]
+        let files = msg
+            .attachments
+            .iter()
+            .map(|x| AttachmentType::Bytes {
+                data: x.data.into(),
+                filename: x.name.to_string(),
+            })
+            .collect::<Vec<_>>();
+
+        self.channel_id
+            .send_files(&self.origin.http, files, |m| m.content(msg.content))
+            .await
+            .context("failed to send message to discord")?;
+
+        Ok(())
     }
 }

@@ -1,6 +1,6 @@
 use {
     crate::{
-        bot::{Attachment, BotService, Message},
+        bot::{Attachment, BotService, Context, Message, SendMessage},
         client::{ServiceEntry, ServiceEntryInner},
         Synced, ThreadSafe,
     },
@@ -29,57 +29,123 @@ impl ConsoleClient {
     }
 
     pub async fn run(self) -> Result<()> {
-        let mut buf = String::new();
-
-        loop {
+        let read_line = || {
             tokio::task::block_in_place(|| {
+                let mut buf = String::new();
+
+                println!();
                 print!("> ");
                 stdout().flush().unwrap();
                 stdin().read_line(&mut buf).unwrap();
-            });
 
-            let message = ConsoleMessage { content: buf };
+                buf.trim().to_string()
+            })
+        };
+
+        loop {
+            let input = read_line();
+            let mut attachments = vec![];
+
+            const ATTACHMENT_CMD: &str = "!attachments";
+
+            let message = {
+                if input.starts_with(ATTACHMENT_CMD) {
+                    for a in input[ATTACHMENT_CMD.len()..].trim().split(" ") {
+                        attachments.push(ConsoleAttachment { name: a.trim() });
+                    }
+
+                    println!(
+                        "(ConsoleClient): {} attachments confirmed. type message. or type STOP to cancel.",
+                        attachments.len()
+                    );
+
+                    let content = read_line();
+
+                    if content == "STOP" {
+                        println!("(ConsoleClient): canceled.");
+                        continue;
+                    }
+
+                    ConsoleMessage {
+                        content,
+                        attachments: attachments.iter().map(|x| x as _).collect::<Vec<_>>(),
+                    }
+                } else {
+                    ConsoleMessage {
+                        content: input,
+                        attachments: vec![],
+                    }
+                }
+            };
 
             for service in &self.services {
-                match service.on_message(&message).await {
-                    Ok(Some(t)) => println!("{}", t),
-                    Err(e) => println!("{:?}", e),
-                    _ => {}
+                let ctx = ConsoleContext {
+                    service_name: service.name(),
                 };
-            }
 
-            buf = message.content;
-            buf.clear();
+                let result = service.on_message(&message, &ctx).await;
+                if let Err(e) = result {
+                    println!(
+                        "(ConsoleClient): error occur while calling service: {:?}",
+                        e
+                    );
+                }
+            }
         }
     }
 }
 
-struct ConsoleMessage {
+struct ConsoleMessage<'a> {
     content: String,
+    attachments: Vec<&'a dyn Attachment>,
 }
 
-impl Message for ConsoleMessage {
+impl Message for ConsoleMessage<'_> {
     fn content(&self) -> &str {
         &self.content
     }
 
     fn attachments(&self) -> &[&dyn Attachment] {
-        &[] // TODO: support this
+        &self.attachments
     }
 }
 
-struct ConsoleAttachment {
-    name: String,
-    data: Vec<u8>,
+struct ConsoleAttachment<'a> {
+    name: &'a str,
 }
 
 #[async_trait]
-impl Attachment for ConsoleAttachment {
+impl Attachment for ConsoleAttachment<'_> {
     fn name(&self) -> &str {
         &self.name
     }
 
     async fn download(&self) -> Result<Vec<u8>> {
-        Ok(self.data.clone())
+        Ok(vec![])
+    }
+}
+
+struct ConsoleContext {
+    service_name: &'static str,
+}
+
+#[async_trait]
+impl Context for ConsoleContext {
+    async fn send_message(&self, msg: SendMessage<'_>) -> Result<()> {
+        println!("({}): {}", self.service_name, msg.content);
+
+        if !msg.attachments.is_empty() {
+            println!(
+                "with {} attachments: {}",
+                msg.attachments.len(),
+                msg.attachments
+                    .iter()
+                    .map(|x| x.name)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        }
+
+        Ok(())
     }
 }
