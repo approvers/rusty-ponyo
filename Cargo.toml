@@ -4,20 +4,41 @@ version = "0.1.0"
 authors = ["kawaemon <34652535+kawaemon@users.noreply.github.com>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+discord_client = ["serenity"]
+console_client = []
+
+mongo_db = ["mongodb"]
+memory_db = []
+
+dev = ["memory_db", "console_client"]
+prod = ["mongo_db", "discord_client"]
+
+default = ["dev"]
+
 
 [dependencies]
-anyhow = "1.0.38"
-async-trait = "0.1.42"
-dotenv = "0.15.0"
-mongodb = "1.1.1"
-serde = "1.0.123"
-tokio = { version = "1.1.1", features=["rt-multi-thread"] }
-tokio-stream = "0.1.2"
-tracing = "0.1.22"
-tracing-subscriber = "0.2.15"
+anyhow = "1.0"
+async-trait = "0.1"
+dotenv = "0.15"
+serde = "1.0"
+tokio-stream = "0.1"
+tracing = "0.1"
+tracing-subscriber = "0.2"
+chrono = "0.4"
+parking_lot = "0.11"
+cfg-if = "1.0.0"
 
 [dependencies.serenity]
-version = "0.10.2"
+version = "0.10"
+optional = true
 default-features = false
 features = ["rustls_backend", "cache", "client", "gateway", "model"]
+
+[dependencies.tokio]
+version = "1.2"
+features = ["rt-multi-thread", "parking_lot"]
+
+[dependencies.mongodb]
+version = "2.0.0-alpha"
+optional = true

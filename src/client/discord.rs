@@ -1,13 +1,18 @@
 use {
     crate::{
-        bot::BotService,
-        client::{Message, ServiceEntry, ServiceEntryInner},
+        bot::{Attachment, BotService, Context, Message, SendMessage},
+        client::{ServiceEntry, ServiceEntryInner},
         Synced, ThreadSafe,
     },
     anyhow::{Context as _, Result},
     async_trait::async_trait,
     serenity::{
-        model::{channel::Message as SerenityMessage, gateway::Ready},
+        http::AttachmentType,
+        model::{
+            channel::{Attachment as SerenityAttachment, Message as SerenityMessage},
+            gateway::Ready,
+            id::ChannelId as SerenityChannelId,
+        },
         prelude::{Client, Context as SerenityContext, EventHandler},
     },
 };
@@ -23,8 +28,8 @@ impl DiscordClient {
 
     pub fn add_service<S, D>(mut self, service: S, db: Synced<D>) -> Self
     where
-        S: BotService<Database = D>,
-        D: ThreadSafe,
+        S: BotService<Database = D> + 'static,
+        D: ThreadSafe + 'static,
     {
         self.services
             .push(Box::new(ServiceEntryInner { service, db }));
@@ -57,35 +62,92 @@ impl EventHandler for EvHandler {
     }
 
     async fn message(&self, ctx: SerenityContext, message: SerenityMessage) {
-        let message = DiscordMessage { origin: message };
+        let converted_attachments = message
+            .attachments
+            .into_iter()
+            .map(DiscordAttachment)
+            .collect::<Vec<_>>();
+
+        let converted_message = DiscordMessage {
+            content: message.content.clone(),
+            attachments: converted_attachments.iter().map(|x| x as _).collect(),
+        };
+
+        let converted_context = DiscordContext {
+            origin: ctx,
+            channel_id: message.channel_id,
+        };
 
         for service in &self.services {
-            let result = service.on_message(&message).await;
+            let result = service
+                .on_message(&converted_message, &converted_context)
+                .await;
 
-            match result {
-                Err(err) => tracing::error!(
+            if let Err(err) = result {
+                tracing::error!(
                     "Error occur while running command '{}'\n{:?}",
-                    &message.origin.content,
+                    &message.content,
                     err
-                ),
-
-                Ok(Some(text)) => {
-                    if let Err(e) = message.origin.channel_id.say(&ctx.http, &text).await {
-                        tracing::error!("Error occur while sending message {:?},'{}'", e, text);
-                    }
-                }
-                _ => {}
+                );
             }
         }
     }
 }
 
-struct DiscordMessage {
-    origin: SerenityMessage,
+struct DiscordMessage<'a> {
+    content: String,
+    attachments: Vec<&'a dyn Attachment>,
 }
 
-impl Message for DiscordMessage {
+impl Message for DiscordMessage<'_> {
     fn content(&self) -> &str {
-        &self.origin.content
+        &self.content
+    }
+
+    fn attachments(&self) -> &[&dyn Attachment] {
+        &self.attachments
+    }
+}
+
+struct DiscordAttachment(SerenityAttachment);
+
+#[async_trait]
+impl Attachment for DiscordAttachment {
+    fn name(&self) -> &str {
+        &self.0.filename
+    }
+
+    async fn download(&self) -> Result<Vec<u8>> {
+        self.0
+            .download()
+            .await
+            .context("failed to download attachment from discord")
+    }
+}
+
+struct DiscordContext {
+    origin: SerenityContext,
+    channel_id: SerenityChannelId,
+}
+
+#[async_trait]
+impl Context for DiscordContext {
+    async fn send_message(&self, msg: SendMessage<'_>) -> Result<()> {
+        #[rustfmt::skip]
+        let files = msg
+            .attachments
+            .iter()
+            .map(|x| AttachmentType::Bytes {
+                data: x.data.into(),
+                filename: x.name.to_string(),
+            })
+            .collect::<Vec<_>>();
+
+        self.channel_id
+            .send_files(&self.origin.http, files, |m| m.content(msg.content))
+            .await
+            .context("failed to send message to discord")?;
+
+        Ok(())
     }
 }

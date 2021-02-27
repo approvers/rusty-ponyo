@@ -1,6 +1,10 @@
+mod model;
+
 use {
-    super::MessageAliasDatabase,
-    crate::model::{MessageAlias, MessageAliasRef},
+    crate::{
+        db::{mongodb::model::MongoMessageAlias, MessageAliasDatabase},
+        model::MessageAlias,
+    },
     anyhow::{Context as _, Result},
     async_trait::async_trait,
     mongodb::{
@@ -33,8 +37,8 @@ const MESSAGE_ALIAS_COLLECTION_NAME: &str = "MessageAlias";
 
 #[async_trait]
 impl MessageAliasDatabase for MongoDB {
-    async fn save(&mut self, key: &str, message: &str) -> Result<()> {
-        let alias = MessageAliasRef { key, message };
+    async fn save(&mut self, alias: MessageAlias) -> Result<()> {
+        let alias: MongoMessageAlias = alias.into();
         let doc = bson::to_document(&alias).context("failed to serialize alias")?;
 
         self.inner
@@ -46,16 +50,16 @@ impl MessageAliasDatabase for MongoDB {
         Ok(())
     }
 
-    async fn get(&self, key: &str) -> Result<Option<String>> {
+    async fn get(&self, key: &str) -> Result<Option<MessageAlias>> {
         self.inner
             .collection(MESSAGE_ALIAS_COLLECTION_NAME)
             .find_one(doc! { "key": key }, None)
             .await
             .context("failed to fetch alias")?
-            .map(bson::from_document::<MessageAlias>)
+            .map(bson::from_document::<MongoMessageAlias>)
             .transpose()
             .context("failed to deserialize alias")
-            .map(|x| x.map(|x| x.message))
+            .map(|x| x.map(|x| x.into()))
     }
 
     async fn len(&self) -> Result<u32> {

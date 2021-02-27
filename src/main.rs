@@ -6,15 +6,30 @@ mod db;
 mod model;
 
 use {
+    crate::bot::alias::MessageAliasBot,
     anyhow::{Context as _, Result},
+    cfg_if::cfg_if,
     std::sync::Arc,
     tokio::sync::RwLock,
 };
 
+#[rustfmt::skip]
+#[cfg(all(feature = "discord_client", feature = "console_client"))]
+compile_error!("You can't enable both of discord_client and console_client feature at the same time.");
+
+#[cfg(all(feature = "mongo_db", feature = "memory_db"))]
+compile_error!("You can't enable both of mongo_db and memory_db feature at the same time.");
+
+#[cfg(not(any(feature = "discord_client", feature = "console_client")))]
+compile_error!("You must enable one of discord_client or console_client feature.");
+
+#[cfg(not(any(feature = "mongo_db", feature = "memory_db")))]
+compile_error!("You must enable mongo_db or memory_db feature.");
+
 type Synced<T> = Arc<RwLock<T>>;
 
-trait ThreadSafe: Send + Sync + 'static {}
-impl<T> ThreadSafe for T where T: Send + Sync + 'static {}
+trait ThreadSafe: Send + Sync {}
+impl<T> ThreadSafe for T where T: Send + Sync {}
 
 fn main() -> Result<()> {
     dotenv::dotenv().ok();
@@ -38,14 +53,35 @@ fn env_var(name: &str) -> Result<String> {
 }
 
 async fn async_main() -> Result<()> {
-    let token = env_var("DISCORD_TOKEN")?;
-    crate::client::discord::DiscordClient::new()
-        .add_service(
-            crate::bot::alias::MessageAliasBot::new(),
-            Arc::new(RwLock::new(crate::db::mem::MemoryDB::new())),
-        )
-        .run(&token)
-        .await?;
+    let service = MessageAliasBot::new();
 
-    Ok(())
+    let db = {
+        cfg_if! {
+            if #[cfg(feature = "memory_db")] {
+                crate::db::mem::MemoryDB::new()
+            } else if #[cfg(feature = "mongo_db")] {
+                crate::db::mongodb::MongoDB::new(&env_var("MONGODB_URI")?).await?
+            } else {
+                compile_error!()
+            }
+        }
+    };
+
+    let db = Arc::new(RwLock::new(db));
+
+    cfg_if! {
+        if #[cfg(feature = "console_client")] {
+            crate::client::console::ConsoleClient::new()
+                .add_service(service, db)
+                .run()
+                .await
+        } else if #[cfg(feature = "discord_client")] {
+            crate::client::discord::DiscordClient::new()
+                .add_service(service, db)
+                .run(&env_var("DISCORD_TOKEN")?)
+                .await
+        } else {
+            compile_error!()
+        }
+    }
 }

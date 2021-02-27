@@ -1,13 +1,16 @@
+use super::SendAttachment;
+
 mod commands;
 mod parser;
 
 use {
     crate::{
-        bot::{BotService, Message},
+        bot::{BotService, Context, Message, SendMessage},
         db::MessageAliasDatabase,
         Synced,
     },
     anyhow::Result,
+    async_trait::async_trait,
     std::marker::PhantomData,
 };
 
@@ -15,27 +18,44 @@ const PREFIX: &str = "g!alias";
 
 pub(crate) struct MessageAliasBot<D: MessageAliasDatabase>(PhantomData<fn() -> D>);
 
-#[async_trait::async_trait]
+#[async_trait]
 impl<D: MessageAliasDatabase> BotService for MessageAliasBot<D> {
+    const NAME: &'static str = "MessageAliasBot";
     type Database = D;
 
     async fn on_message(
         &self,
         db: &Synced<Self::Database>,
         msg: &dyn Message,
-    ) -> Result<Option<String>> {
+        ctx: &dyn Context,
+    ) -> Result<()> {
         // TODO: support commandAdd?
         if msg.content().starts_with(PREFIX) {
-            return self.on_command(db, msg).await;
+            if let Some(msg) = self.on_command(db, msg).await? {
+                ctx.send_message(SendMessage {
+                    content: &msg,
+                    attachments: &[],
+                })
+                .await?;
+            }
         }
 
-        let fetched = db.read().await.get(msg.content()).await?;
-
-        if let Some(msg) = fetched {
-            return Ok(Some(msg));
+        if let Some(registered_alias) = db.read().await.get(msg.content()).await? {
+            ctx.send_message(SendMessage {
+                content: &registered_alias.message,
+                attachments: &registered_alias
+                    .attachments
+                    .iter()
+                    .map(|x| SendAttachment {
+                        name: &x.name,
+                        data: &x.data,
+                    })
+                    .collect::<Vec<_>>(),
+            })
+            .await?;
         }
 
-        Ok(None)
+        Ok(())
     }
 }
 
@@ -76,7 +96,7 @@ impl<D: MessageAliasDatabase> MessageAliasBot<D> {
                 let value = parsed.args.get(1);
 
                 if let (Some(key), Some(value)) = (key, value) {
-                    return make(db, key, value).await.map(Some);
+                    return make(db, key, value, message.attachments()).await.map(Some);
                 }
 
                 return Ok(Some(help()));
