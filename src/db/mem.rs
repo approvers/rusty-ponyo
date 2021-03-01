@@ -1,5 +1,5 @@
 use {
-    crate::{db::MessageAliasDatabase, model::MessageAlias},
+    crate::bot::alias::{model::MessageAlias, MessageAliasDatabase},
     anyhow::Result,
     async_trait::async_trait,
 };
