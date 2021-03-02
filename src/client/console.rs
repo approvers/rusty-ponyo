@@ -149,3 +149,41 @@ impl Context for ConsoleContext {
         Ok(())
     }
 }
+
+mod test {
+    mod console_client {
+        use crate::client::console::ConsoleClient;
+        use crate::bot::{BotService, Context, Message};
+        use crate::Synced;
+        use std::sync::Arc;
+        use tokio::sync::RwLock;
+        use anyhow::Result;
+
+        #[test]
+        fn add_service() {
+            #[derive(PartialEq)]
+            struct MockService;
+            #[async_trait::async_trait]
+            impl BotService for MockService {
+                const NAME: &'static str = "mock";
+                type Database = ();
+
+                async fn on_message(&self, _: &Synced<Self::Database>, _: &dyn Message, _: &dyn Context) -> Result<()> {
+                    unimplemented!()
+                }
+            }
+
+            let db = Arc::new(RwLock::new(()));
+
+            let client = ConsoleClient::new()
+                .add_service(MockService, db.clone());
+
+            assert!(
+                client.services.iter()
+                    .any(|x| {
+                       x.name() == "mock"
+                    })
+            )
+        }
+    }
+}
