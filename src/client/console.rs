@@ -1,3 +1,6 @@
+use std::io::{BufRead, BufReader, BufWriter};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use {
     crate::{
         bot::{Attachment, BotService, Context, Message, SendMessage},
@@ -6,16 +9,30 @@ use {
     },
     anyhow::Result,
     async_trait::async_trait,
-    std::io::{stdin, stdout, Write},
+    std::io::{Read, Write},
 };
 
-pub(crate) struct ConsoleClient {
+pub(crate) struct BufferClient<R, W>
+where
+    R: Read,
+    W: Write + ThreadSafe,
+{
+    reader: BufReader<R>,
+    writer: Synced<BufWriter<W>>,
     services: Vec<Box<dyn ServiceEntry>>,
 }
 
-impl ConsoleClient {
-    pub fn new() -> Self {
-        Self { services: vec![] }
+impl<R, W> BufferClient<R, W>
+where
+    R: Read,
+    W: Write + ThreadSafe,
+{
+    pub fn new(reader: R, writer: W) -> Self {
+        Self {
+            reader: BufReader::new(reader),
+            writer: Arc::new(RwLock::new(BufWriter::new(writer))),
+            services: vec![],
+        }
     }
 
     pub fn add_service<S, D>(mut self, service: S, db: Synced<D>) -> Self
@@ -28,22 +45,25 @@ impl ConsoleClient {
         self
     }
 
-    pub async fn run(self) -> Result<()> {
-        let read_line = || {
-            tokio::task::block_in_place(|| {
-                let mut buf = String::new();
+    async fn write_line<S: Into<String>>(&self, message: S) {
+        writeln!(self.writer.write().await, "{}", message.into()).unwrap();
+    }
+    async fn read_line(&mut self) -> String {
+        self.write_line("").await;
+        self.write_line("> ").await;
+        self.writer.write().await.flush().unwrap();
 
-                println!();
-                print!("> ");
-                stdout().flush().unwrap();
-                stdin().read_line(&mut buf).unwrap();
+        tokio::task::block_in_place(|| {
+            let mut buf = String::new();
+            self.reader.read_line(&mut buf).unwrap();
 
-                buf.trim().to_string()
-            })
-        };
+            buf.trim().to_string()
+        })
+    }
 
+    pub async fn run(mut self) -> Result<()> {
         loop {
-            let input = read_line();
+            let input = self.read_line().await;
             let mut attachments = vec![];
 
             const ATTACHMENT_CMD: &str = "!attachments";
@@ -51,27 +71,27 @@ impl ConsoleClient {
             let message = {
                 if input.starts_with(ATTACHMENT_CMD) {
                     for a in input[ATTACHMENT_CMD.len()..].trim().split(" ") {
-                        attachments.push(ConsoleAttachment { name: a.trim() });
+                        attachments.push(BufferAttachment { name: a.trim() });
                     }
 
-                    println!(
+                    self.write_line(format!(
                         "(ConsoleClient): {} attachments confirmed. type message. or type STOP to cancel.",
                         attachments.len()
-                    );
+                    )).await;
 
-                    let content = read_line();
+                    let content = self.read_line().await;
 
                     if content == "STOP" {
-                        println!("(ConsoleClient): canceled.");
+                        self.write_line("(ConsoleClient): canceled.").await;
                         continue;
                     }
 
-                    ConsoleMessage {
+                    BufferMessage {
                         content,
                         attachments: attachments.iter().map(|x| x as _).collect::<Vec<_>>(),
                     }
                 } else {
-                    ConsoleMessage {
+                    BufferMessage {
                         content: input,
                         attachments: vec![],
                     }
@@ -79,28 +99,30 @@ impl ConsoleClient {
             };
 
             for service in &self.services {
-                let ctx = ConsoleContext {
+                let ctx = BufferContext {
+                    writer: self.writer.clone(),
                     service_name: service.name(),
                 };
 
                 let result = service.on_message(&message, &ctx).await;
                 if let Err(e) = result {
-                    println!(
+                    self.write_line(format!(
                         "(ConsoleClient): error occur while calling service: {:?}",
-                        e
-                    );
+                        e,
+                    ))
+                    .await;
                 }
             }
         }
     }
 }
 
-struct ConsoleMessage<'a> {
+struct BufferMessage<'a> {
     content: String,
     attachments: Vec<&'a dyn Attachment>,
 }
 
-impl Message for ConsoleMessage<'_> {
+impl Message for BufferMessage<'_> {
     fn content(&self) -> &str {
         &self.content
     }
@@ -110,12 +132,12 @@ impl Message for ConsoleMessage<'_> {
     }
 }
 
-struct ConsoleAttachment<'a> {
+struct BufferAttachment<'a> {
     name: &'a str,
 }
 
 #[async_trait]
-impl Attachment for ConsoleAttachment<'_> {
+impl Attachment for BufferAttachment<'_> {
     fn name(&self) -> &str {
         &self.name
     }
@@ -125,17 +147,34 @@ impl Attachment for ConsoleAttachment<'_> {
     }
 }
 
-struct ConsoleContext {
+struct BufferContext<W>
+where
+    W: Write + ThreadSafe,
+{
+    writer: Synced<BufWriter<W>>,
     service_name: &'static str,
 }
 
+impl<W> BufferContext<W>
+where
+    W: Write + ThreadSafe,
+{
+    async fn write_line<S: Into<String>>(&self, message: S) {
+        writeln!(self.writer.write().await, "{}", message.into()).unwrap();
+    }
+}
+
 #[async_trait]
-impl Context for ConsoleContext {
+impl<W> Context for BufferContext<W>
+where
+    W: Write + ThreadSafe,
+{
     async fn send_message(&self, msg: SendMessage<'_>) -> Result<()> {
-        println!("({}): {}", self.service_name, msg.content);
+        self.write_line(format!("({}): {}", self.service_name, msg.content))
+            .await;
 
         if !msg.attachments.is_empty() {
-            println!(
+            self.write_line(format!(
                 "with {} attachments: {}",
                 msg.attachments.len(),
                 msg.attachments
@@ -143,7 +182,8 @@ impl Context for ConsoleContext {
                     .map(|x| x.name)
                     .collect::<Vec<_>>()
                     .join(", ")
-            )
+            ))
+            .await;
         }
 
         Ok(())
@@ -151,39 +191,41 @@ impl Context for ConsoleContext {
 }
 
 mod test {
-    mod console_client {
-        use crate::client::console::ConsoleClient;
+    mod buffer_client {
         use crate::bot::{BotService, Context, Message};
+        use crate::client::console::BufferClient;
         use crate::Synced;
+        use anyhow::Result;
         use std::sync::Arc;
         use tokio::sync::RwLock;
-        use anyhow::Result;
+        use std::io::{stdin, stdout};
+        use async_trait::async_trait;
 
         #[test]
         fn add_service() {
             #[derive(PartialEq)]
             struct MockService;
-            #[async_trait::async_trait]
+            #[async_trait]
             impl BotService for MockService {
                 const NAME: &'static str = "mock";
                 type Database = ();
 
-                async fn on_message(&self, _: &Synced<Self::Database>, _: &dyn Message, _: &dyn Context) -> Result<()> {
+                async fn on_message(
+                    &self,
+                    _: &Synced<Self::Database>,
+                    _: &dyn Message,
+                    _: &dyn Context,
+                ) -> Result<()> {
                     unimplemented!()
                 }
             }
 
             let db = Arc::new(RwLock::new(()));
 
-            let client = ConsoleClient::new()
+            let client = BufferClient::new(stdin(), stdout())
                 .add_service(MockService, db.clone());
 
-            assert!(
-                client.services.iter()
-                    .any(|x| {
-                       x.name() == "mock"
-                    })
-            )
+            assert!(client.services.iter().any(|x| { x.name() == "mock" }))
         }
     }
 }

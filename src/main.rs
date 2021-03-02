@@ -70,10 +70,12 @@ async fn async_main() -> Result<()> {
 
     cfg_if! {
         if #[cfg(feature = "console_client")] {
-            crate::client::console::ConsoleClient::new()
-                .add_service(service, db)
-                .run()
-                .await
+            crate::client::console::BufferClient::new(
+                std::io::stdin(), std::io::stdout()
+            )
+            .add_service(service, db)
+            .run()
+            .await
         } else if #[cfg(feature = "discord_client")] {
             crate::client::discord::DiscordClient::new()
                 .add_service(service, db)
