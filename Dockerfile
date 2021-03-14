@@ -1,4 +1,4 @@
-FROM rust:alpine as base
+FROM rust:1.50-alpine3.13 as base
 
 RUN apk add --no-cache musl-dev
 
@@ -9,7 +9,7 @@ WORKDIR /src
 RUN cargo build --release --no-default-features --features "prod"
 
 
-FROM alpine
+FROM alpine:3.13
 
 COPY --from=base /src/target/release/rusty-ponyo /usr/local/bin
 
