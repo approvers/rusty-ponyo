@@ -175,7 +175,7 @@ impl EvHandler {
                 .collect::<Vec<_>>();
 
             for uid in missing_in_self_state {
-                self_state.insert(uid.clone());
+                self_state.insert(uid);
                 tracing::info!("user({}) has actually joined to vc", uid.0);
 
                 Self::do_for_each_service(&inner, "on_vc_join", |s| {
@@ -224,7 +224,7 @@ impl EventHandler for EvHandler {
 
         let mut self_state = self.inner.vc_joined_users.lock().await;
 
-        let self_state_currently_joined = self_state.iter().find(|x| **x == user_id).is_some();
+        let self_state_currently_joined = self_state.iter().any(|x| *x == user_id);
 
         let converted_ctx = DiscordContext::from_serenity(&ctx, APPROVERS_DEFAULT_CHANNEL_ID);
 
