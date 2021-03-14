@@ -21,23 +21,26 @@ default = ["dev"]
 anyhow = "1.0"
 async-trait = "0.1"
 dotenv = "0.15"
-serde = "1.0"
+serde = { version = "1.0", features = ["derive"] }
 tokio-stream = "0.1"
 tracing = "0.1"
 tracing-subscriber = "0.2"
-chrono = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
 parking_lot = "0.11"
 cfg-if = "1.0.0"
+serde_json = "1.0"
+chrono-tz = "0.5"
+hashbrown = "0.9"
 
 [dependencies.serenity]
 version = "0.10"
 optional = true
 default-features = false
-features = ["rustls_backend", "cache", "client", "gateway", "model"]
+features = ["rustls_backend", "client", "gateway", "model", "cache"]
 
 [dependencies.tokio]
 version = "1.2"
-features = ["rt-multi-thread", "parking_lot"]
+features = ["rt-multi-thread", "parking_lot", "fs"]
 
 [dependencies.mongodb]
 version = "2.0.0-alpha"

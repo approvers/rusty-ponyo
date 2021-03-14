@@ -1,6 +1,9 @@
-use chrono::{DateTime, Utc};
+use {
+    chrono::{DateTime, Utc},
+    serde::Serialize,
+};
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub(crate) struct MessageAlias {
     pub(crate) key: String,
     pub(crate) message: String,
@@ -8,7 +11,7 @@ pub(crate) struct MessageAlias {
     pub(crate) created_at: DateTime<Utc>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub(crate) struct MessageAliasAttachment {
     pub(crate) name: String,
     pub(crate) data: Vec<u8>,

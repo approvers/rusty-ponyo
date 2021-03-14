@@ -5,7 +5,7 @@ mod client;
 mod db;
 
 use {
-    crate::bot::alias::MessageAliasBot,
+    crate::bot::{alias::MessageAliasBot, genkai_point::GenkaiPointBot},
     anyhow::{Context as _, Result},
     cfg_if::cfg_if,
     std::sync::Arc,
@@ -52,33 +52,41 @@ fn env_var(name: &str) -> Result<String> {
 }
 
 async fn async_main() -> Result<()> {
-    let service = MessageAliasBot::new();
-
     let db = {
         cfg_if! {
             if #[cfg(feature = "memory_db")] {
                 crate::db::mem::MemoryDB::new()
             } else if #[cfg(feature = "mongo_db")] {
-                crate::db::mongodb::MongoDB::new(&env_var("MONGODB_URI")?).await?
+                crate::db::mongodb::MongoDb::new(&env_var("MONGODB_URI")?).await?
             } else {
-                compile_error!()
+                compile_error!();
             }
         }
     };
 
     let db = Arc::new(RwLock::new(db));
 
+    let mut client = {
+        cfg_if! {
+            if #[cfg(feature = "console_client")] {
+                crate::client::console::ConsoleClient::new()
+            } else if #[cfg(feature = "discord_client")] {
+                crate::client::discord::DiscordClient::new()
+            } else {
+                compile_error!()
+            }
+        }
+    };
+
+    client
+        .add_service(MessageAliasBot::new(), Arc::clone(&db))
+        .add_service(GenkaiPointBot::new(), Arc::clone(&db));
+
     cfg_if! {
         if #[cfg(feature = "console_client")] {
-            crate::client::console::ConsoleClient::new()
-                .add_service(service, db)
-                .run()
-                .await
+            client.run().await
         } else if #[cfg(feature = "discord_client")] {
-            crate::client::discord::DiscordClient::new()
-                .add_service(service, db)
-                .run(&env_var("DISCORD_TOKEN")?)
-                .await
+            client.run(&env_var("DISCORD_TOKEN")?).await
         } else {
             compile_error!()
         }

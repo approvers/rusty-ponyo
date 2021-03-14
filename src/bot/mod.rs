@@ -5,8 +5,10 @@ use {
 };
 
 pub mod alias;
+pub mod genkai_point;
 
 pub(crate) trait Message: ThreadSafe {
+    fn author(&self) -> &dyn User;
     fn content(&self) -> &str;
     fn attachments(&self) -> &[&dyn Attachment];
 }
@@ -15,6 +17,11 @@ pub(crate) trait Message: ThreadSafe {
 pub(crate) trait Attachment: ThreadSafe {
     fn name(&self) -> &str;
     async fn download(&self) -> Result<Vec<u8>>;
+}
+
+pub(crate) trait User: ThreadSafe {
+    fn id(&self) -> u64;
+    fn name(&self) -> &str;
 }
 
 pub(crate) struct SendMessage<'a> {
@@ -43,4 +50,34 @@ pub(crate) trait BotService: ThreadSafe {
         msg: &dyn Message,
         ctx: &dyn Context,
     ) -> Result<()>;
+
+    // called on bot started and got who is currently joined to vc
+    async fn on_vc_data_available(
+        &self,
+        _db: &Synced<Self::Database>,
+        _ctx: &dyn Context,
+        _joined_user_ids: &[u64],
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    // called on user has joined to vc
+    async fn on_vc_join(
+        &self,
+        _db: &Synced<Self::Database>,
+        _ctx: &dyn Context,
+        _user_id: u64,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    // called on user has left from vc and not in any channel
+    async fn on_vc_leave(
+        &self,
+        _db: &Synced<Self::Database>,
+        _ctx: &dyn Context,
+        _user_id: u64,
+    ) -> Result<()> {
+        Ok(())
+    }
 }

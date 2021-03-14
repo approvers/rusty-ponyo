@@ -1,5 +1,8 @@
 use {
-    crate::bot::alias::model::{MessageAlias, MessageAliasAttachment},
+    crate::bot::{
+        alias::model::{MessageAlias, MessageAliasAttachment},
+        genkai_point::model::Session,
+    },
     mongodb::bson::{spec::BinarySubtype, Binary, DateTime},
     serde::{Deserialize, Serialize},
 };
@@ -57,6 +60,35 @@ impl Into<MessageAliasAttachment> for MongoMessageAliasAttachment {
         MessageAliasAttachment {
             name: self.name,
             data: self.data.bytes,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub(super) struct MongoSession {
+    user_id: String,
+    joined_at: DateTime,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    left_at: Option<DateTime>,
+}
+
+impl From<Session> for MongoSession {
+    fn from(s: Session) -> Self {
+        Self {
+            user_id: s.user_id.to_string(),
+            joined_at: DateTime(s.joined_at),
+            left_at: s.left_at.map(DateTime),
+        }
+    }
+}
+
+impl Into<Session> for MongoSession {
+    fn into(self) -> Session {
+        Session {
+            user_id: self.user_id.parse().expect("invalid session user_id"),
+            joined_at: self.joined_at.0,
+            left_at: self.left_at.map(|x| x.0),
         }
     }
 }

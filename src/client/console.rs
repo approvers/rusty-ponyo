@@ -1,6 +1,6 @@
 use {
     crate::{
-        bot::{Attachment, BotService, Context, Message, SendMessage},
+        bot::{Attachment, BotService, Context, Message, SendMessage, User},
         client::{ServiceEntry, ServiceEntryInner},
         Synced, ThreadSafe,
     },
@@ -18,7 +18,7 @@ impl ConsoleClient {
         Self { services: vec![] }
     }
 
-    pub fn add_service<S, D>(mut self, service: S, db: Synced<D>) -> Self
+    pub fn add_service<S, D>(&mut self, service: S, db: Synced<D>) -> &mut Self
     where
         S: BotService<Database = D> + 'static,
         D: ThreadSafe + 'static,
@@ -107,6 +107,22 @@ impl Message for ConsoleMessage<'_> {
 
     fn attachments(&self) -> &[&dyn Attachment] {
         &self.attachments
+    }
+
+    fn author(&self) -> &dyn crate::bot::User {
+        &ConsoleUser
+    }
+}
+
+struct ConsoleUser;
+
+impl User for ConsoleUser {
+    fn id(&self) -> u64 {
+        0
+    }
+
+    fn name(&self) -> &str {
+        "ConsoleUser"
     }
 }
 
