@@ -50,7 +50,7 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
             [] => None,
             [maybe_prefix, ..] if *maybe_prefix != PREFIX => None,
 
-            [_, "show", ..] => {
+            [_, "show", ..] | [_, "限界ポイント", ..] => {
                 let sessions = db
                     .read()
                     .await
