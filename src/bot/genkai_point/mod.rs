@@ -150,7 +150,7 @@ g!point [subcommand] [args...]
                 .unwrap();
 
             let msg = format!(
-                "now <@!{}> has {} genkai point(+{}!)",
+                "now <@!{}> has {} genkai point (+{})",
                 user_id, sum, this_time_point
             );
 
