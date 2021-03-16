@@ -5,12 +5,6 @@ use {
     serde::Serialize,
 };
 
-pub(super) enum Command {
-    Stats { user_id: u64 },
-    JoinedVc { user_id: u64 },
-    LeftVc { user_id: u64 },
-}
-
 #[derive(Clone, Serialize)]
 pub(crate) struct Session {
     pub(crate) user_id: u64,
