@@ -6,7 +6,8 @@ use {
     },
     anyhow::{Context as _, Result},
     async_trait::async_trait,
-    hashbrown::HashSet,
+    hashbrown::{HashMap, HashSet},
+    once_cell::sync::Lazy,
     serenity::{
         http::AttachmentType,
         model::{
@@ -21,7 +22,10 @@ use {
         prelude::{Client, Context as SerenityContext, EventHandler},
     },
     std::{future::Future, pin::Pin, sync::Arc, time::Duration},
-    tokio::{sync::Mutex, time::interval},
+    tokio::{
+        sync::{Mutex, RwLock},
+        time::interval,
+    },
 };
 
 pub(crate) struct DiscordClient {
@@ -415,16 +419,46 @@ impl Context for DiscordContext {
     }
 
     async fn get_user_name(&self, user_id: u64) -> Result<String> {
-        let user = SerenityUserId(user_id)
+        static CACHE: Lazy<RwLock<HashMap<(Option<SerenityGuildId>, SerenityUserId), String>>> =
+            Lazy::new(|| RwLock::new(HashMap::new()));
+
+        let user_id = SerenityUserId(user_id);
+
+        let hit = CACHE.read().await.get(&(self.guild_id, user_id)).cloned();
+
+        if let Some(hit) = hit {
+            return Ok(hit.clone());
+        }
+
+        let user = user_id
             .to_user(&self.origin)
             .await
-            .context("failed to fetch user info")?;
+            .context("failed to get discord user")?;
 
-        let result = match self.guild_id {
-            Some(gid) => user.nick_in(&self.origin, gid).await.unwrap_or(user.name),
-            None => user.name,
-        };
+        CACHE
+            .write()
+            .await
+            .insert((None, user_id), user.name.clone());
 
-        Ok(result)
+        match self.guild_id {
+            Some(gid) => {
+                let nick = gid
+                    .member(&self.origin, user_id)
+                    .await
+                    .map(|x| x.nick)
+                    .context("failed to get username from discord")?;
+
+                if let Some(ref nick) = nick {
+                    CACHE
+                        .write()
+                        .await
+                        .insert((Some(gid), user_id), nick.clone());
+                }
+
+                Ok(nick.unwrap_or(user.name))
+            }
+
+            None => Ok(user.name),
+        }
     }
 }
