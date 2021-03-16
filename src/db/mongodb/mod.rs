@@ -164,16 +164,10 @@ impl GenkaiPointDatabase for MongoDb {
         Ok(())
     }
 
-    async fn get_all_closed_sessions(&self, user_id: u64) -> Result<Vec<Session>> {
+    async fn get_all_sessions(&self, user_id: u64) -> Result<Vec<Session>> {
         self.inner
             .collection_with_type::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
-            .find(
-                doc! {
-                    "user_id": user_id.to_string(),
-                    "left_at": { "$exists": true }
-                },
-                None,
-            )
+            .find(doc! { "user_id": user_id.to_string() }, None)
             .await
             .context("failed to find")?
             .map(|x| x.map(|x| x.into()))

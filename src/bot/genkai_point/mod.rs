@@ -19,7 +19,7 @@ pub(crate) trait GenkaiPointDatabase: ThreadSafe {
     async fn create_new_session(&mut self, user_id: u64, joined_at: DateTime<Utc>) -> Result<bool>;
     async fn unclosed_session_exists(&self, user_id: u64) -> Result<bool>;
     async fn close_session(&mut self, user_id: u64, left_at: DateTime<Utc>) -> Result<()>;
-    async fn get_all_closed_sessions(&self, user_id: u64) -> Result<Vec<Session>>;
+    async fn get_all_sessions(&self, user_id: u64) -> Result<Vec<Session>>;
     async fn get_all_users_who_has_unclosed_session(&self) -> Result<Vec<u64>>;
 }
 
@@ -51,12 +51,18 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
             [maybe_prefix, ..] if *maybe_prefix != PREFIX => None,
 
             [_, "show", ..] | [_, "限界ポイント", ..] => {
-                let sessions = db
+                let mut sessions = db
                     .read()
                     .await
-                    .get_all_closed_sessions(msg.author().id())
+                    .get_all_sessions(msg.author().id())
                     .await
                     .context("failed to get sessions")?;
+
+                let maybe_unclosed_session = sessions.iter_mut().find(|x| x.left_at.is_none());
+
+                if let Some(unclosed_session) = maybe_unclosed_session {
+                    unclosed_session.left_at = Some(Utc::now());
+                }
 
                 let points = sessions
                     .iter()
@@ -134,7 +140,7 @@ g!point [subcommand] [args...]
         let mut sessions = db
             .read()
             .await
-            .get_all_closed_sessions(user_id)
+            .get_all_sessions(user_id)
             .await
             .context("failed to get all closed sessions")?;
 
