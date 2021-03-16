@@ -1,7 +1,10 @@
 use {
     crate::bot::{
         alias::{model::MessageAlias, MessageAliasDatabase},
-        genkai_point::{model::Session, GenkaiPointDatabase},
+        genkai_point::{
+            model::{Session, UserStat},
+            GenkaiPointDatabase,
+        },
     },
     anyhow::{anyhow, Context as _, Result},
     async_trait::async_trait,
@@ -114,19 +117,6 @@ impl GenkaiPointDatabase for MemoryDB {
         Ok(())
     }
 
-    async fn get_all_closed_sessions(
-        &self,
-        user_id: u64,
-    ) -> Result<Vec<crate::bot::genkai_point::model::Session>> {
-        Ok(self
-            .sessions
-            .iter()
-            .filter(|x| x.user_id == user_id)
-            .filter(|x| x.left_at.is_some())
-            .cloned()
-            .collect())
-    }
-
     async fn get_all_users_who_has_unclosed_session(&self) -> Result<Vec<u64>> {
         let mut list = self
             .sessions
@@ -138,5 +128,38 @@ impl GenkaiPointDatabase for MemoryDB {
         list.dedup();
 
         Ok(list)
+    }
+
+    async fn get_users_all_sessions(&self, user_id: u64) -> Result<Vec<Session>> {
+        Ok(self
+            .sessions
+            .iter()
+            .filter(|x| x.user_id == user_id)
+            .cloned()
+            .collect())
+    }
+
+    async fn get_all_users_stats(&self) -> Result<Vec<UserStat>> {
+        let mut result: Vec<UserStat> = vec![];
+
+        for session in &self.sessions {
+            match result.iter_mut().find(|x| x.user_id == session.user_id) {
+                Some(stat) => {
+                    stat.genkai_point += session.calc_point();
+                    // += is not implemented on chrono::Duration
+                    stat.total_vc_duration = stat.total_vc_duration + session.duration();
+                }
+
+                None => {
+                    result.push(UserStat {
+                        user_id: session.user_id,
+                        genkai_point: session.calc_point(),
+                        total_vc_duration: session.duration(),
+                    });
+                }
+            }
+        }
+
+        Ok(result)
     }
 }

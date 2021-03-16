@@ -128,7 +128,11 @@ impl EvHandler {
                     .insert(SerenityUserId(*user_id));
             }
 
-            let converted_ctx = DiscordContext::from_serenity(&ctx, APPROVERS_DEFAULT_CHANNEL_ID);
+            let converted_ctx = DiscordContext::from_serenity(
+                &ctx,
+                APPROVERS_DEFAULT_CHANNEL_ID,
+                Some(APPROVERS_GUILD_ID),
+            );
 
             Self::do_for_each_service(&inner, "on_vc_data_available", |s| {
                 Box::pin(s.on_vc_data_available(&converted_ctx, &joined_users))
@@ -156,7 +160,11 @@ impl EvHandler {
                 }
             };
 
-            let converted_ctx = DiscordContext::from_serenity(&ctx, APPROVERS_DEFAULT_CHANNEL_ID);
+            let converted_ctx = DiscordContext::from_serenity(
+                &ctx,
+                APPROVERS_DEFAULT_CHANNEL_ID,
+                Some(APPROVERS_GUILD_ID),
+            );
 
             let mut self_state = inner.vc_joined_users.lock().await;
             let serenity_state = &guild.voice_states;
@@ -226,7 +234,7 @@ impl EventHandler for EvHandler {
 
         let self_state_currently_joined = self_state.iter().any(|x| *x == user_id);
 
-        let converted_ctx = DiscordContext::from_serenity(&ctx, APPROVERS_DEFAULT_CHANNEL_ID);
+        let converted_ctx = DiscordContext::from_serenity(&ctx, APPROVERS_DEFAULT_CHANNEL_ID, gid);
 
         match (currently_joined, self_state_currently_joined) {
             // joined
@@ -284,7 +292,8 @@ impl EventHandler for EvHandler {
             },
         };
 
-        let converted_context = DiscordContext::from_serenity(&ctx, message.channel_id);
+        let converted_context =
+            DiscordContext::from_serenity(&ctx, message.channel_id, message.guild_id);
 
         for service in &self.inner.services {
             let result = service
@@ -357,13 +366,19 @@ impl Attachment for DiscordAttachment<'_> {
 struct DiscordContext {
     origin: SerenityContext,
     channel_id: SerenityChannelId,
+    guild_id: Option<SerenityGuildId>,
 }
 
 impl DiscordContext {
-    fn from_serenity(origin: &SerenityContext, channel_id: impl Into<SerenityChannelId>) -> Self {
+    fn from_serenity(
+        origin: &SerenityContext,
+        channel_id: impl Into<SerenityChannelId>,
+        guild_id: Option<impl Into<SerenityGuildId>>,
+    ) -> Self {
         Self {
             origin: origin.clone(),
             channel_id: channel_id.into(),
+            guild_id: guild_id.map(|x| x.into()),
         }
     }
 }
@@ -386,5 +401,19 @@ impl Context for DiscordContext {
             .context("failed to send message to discord")?;
 
         Ok(())
+    }
+
+    async fn get_user_name(&self, user_id: u64) -> Result<String> {
+        let user = SerenityUserId(user_id)
+            .to_user(&self.origin)
+            .await
+            .context("failed to fetch user info")?;
+
+        let result = match self.guild_id {
+            Some(gid) => user.nick_in(&self.origin, gid).await.unwrap_or(user.name),
+            None => user.name,
+        };
+
+        Ok(result)
     }
 }

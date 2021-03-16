@@ -2,7 +2,10 @@ pub(crate) mod model;
 
 use {
     crate::{
-        bot::{genkai_point::model::Session, BotService, Context, Message, SendMessage},
+        bot::{
+            genkai_point::model::{Session, UserStat},
+            BotService, Context, Message, SendMessage,
+        },
         Synced, ThreadSafe,
     },
     anyhow::{Context as _, Result},
@@ -19,8 +22,9 @@ pub(crate) trait GenkaiPointDatabase: ThreadSafe {
     async fn create_new_session(&mut self, user_id: u64, joined_at: DateTime<Utc>) -> Result<bool>;
     async fn unclosed_session_exists(&self, user_id: u64) -> Result<bool>;
     async fn close_session(&mut self, user_id: u64, left_at: DateTime<Utc>) -> Result<()>;
-    async fn get_all_sessions(&self, user_id: u64) -> Result<Vec<Session>>;
+    async fn get_users_all_sessions(&self, user_id: u64) -> Result<Vec<Session>>;
     async fn get_all_users_who_has_unclosed_session(&self) -> Result<Vec<u64>>;
+    async fn get_all_users_stats(&self) -> Result<Vec<UserStat>>;
 }
 
 pub(crate) struct GenkaiPointBot<D>(PhantomData<fn() -> D>);
@@ -28,6 +32,51 @@ pub(crate) struct GenkaiPointBot<D>(PhantomData<fn() -> D>);
 impl<D: GenkaiPointDatabase> GenkaiPointBot<D> {
     pub(crate) fn new() -> Self {
         Self(PhantomData)
+    }
+
+    async fn ranking<F, O>(
+        &self,
+        db: &Synced<D>,
+        ctx: &dyn Context,
+        sort_msg: &str,
+        sort_key_selector: F,
+    ) -> Result<String>
+    where
+        F: Fn(&UserStat) -> O,
+        O: Ord,
+    {
+        let mut ranking = db
+            .read()
+            .await
+            .get_all_users_stats()
+            .await
+            .context("failed to fetch ranking")?;
+
+        ranking.sort_by_key(|x| x.user_id);
+        ranking.sort_by_key(sort_key_selector);
+
+        let mut result = vec!["```".to_string(), sort_msg.to_string()];
+
+        let iter = ranking.iter().rev().take(20).enumerate();
+
+        for (index, stat) in iter {
+            let username = ctx
+                .get_user_name(stat.user_id)
+                .await
+                .context("failed to get username")?;
+
+            result.push(format!(
+                "#{} {}pt. {:.2}h {}",
+                index + 1,
+                stat.genkai_point,
+                (stat.total_vc_duration.num_seconds() as f64) / 3600.,
+                username
+            ))
+        }
+
+        result.push("```".to_string());
+
+        Ok(result.join("\n"))
     }
 }
 
@@ -50,32 +99,31 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
             [] => None,
             [maybe_prefix, ..] if *maybe_prefix != PREFIX => None,
 
+            [_, "ranking", "duration"] => Some(
+                self.ranking(db, ctx, "sorted by vc duration", |x| x.total_vc_duration)
+                    .await?,
+            ),
+
+            [_, "ranking", "point"] | [_, "ranking"] => Some(
+                self.ranking(db, ctx, "sorted by genkai point", |x| x.genkai_point)
+                    .await?,
+            ),
+
             [_, "show", ..] | [_, "限界ポイント", ..] => {
-                let mut sessions = db
+                let sessions = db
                     .read()
                     .await
-                    .get_all_sessions(msg.author().id())
+                    .get_users_all_sessions(msg.author().id())
                     .await
                     .context("failed to get sessions")?;
 
-                let maybe_unclosed_session = sessions.iter_mut().find(|x| x.left_at.is_none());
-
-                if let Some(unclosed_session) = maybe_unclosed_session {
-                    unclosed_session.left_at = Some(Utc::now());
-                }
-
-                let points = sessions
-                    .iter()
-                    .map(|x| x.calc_point())
-                    .sum::<Result<u64>>()
-                    .context("failed to calculate genkai point")?;
+                let points = sessions.iter().map(|x| x.calc_point()).sum::<u64>();
 
                 let vc_hour = sessions
                     .iter()
                     .map(|x| x.duration())
-                    .map(|x| x.map(|x| (x.num_seconds() as f64) / 60. / 60.))
-                    .sum::<Result<f64>>()
-                    .context("failed to get vc duration")?;
+                    .map(|x| (x.num_seconds() as f64) / 3600.)
+                    .sum::<f64>();
 
                 Some(format!(
                     "```\n{name}\n  - points: {points}\n  - total vc duration: {vc_hour:.2} h \n```",
@@ -92,8 +140,9 @@ r#"```asciidoc
 g!point [subcommand] [args...]
 
 = subcommands =
-    help :: この文を出します
-    show :: あなたの限界ポイントなどを出します
+    help                        :: この文を出します
+    show                        :: あなたの限界ポイントなどを出します
+    ranking [duration or point] :: ランキングを出します
 ```"#.into()
             ),
         };
@@ -140,20 +189,16 @@ g!point [subcommand] [args...]
         let mut sessions = db
             .read()
             .await
-            .get_all_sessions(user_id)
+            .get_users_all_sessions(user_id)
             .await
             .context("failed to get all closed sessions")?;
 
         sessions.sort_by_key(|x| x.left_at);
 
-        let this_time_point = sessions.last().unwrap().calc_point().unwrap();
+        let this_time_point = sessions.last().unwrap().calc_point();
 
         if this_time_point > 0 {
-            let sum = sessions
-                .iter()
-                .map(|x| x.calc_point())
-                .sum::<Result<u64>>()
-                .unwrap();
+            let sum = sessions.iter().map(|x| x.calc_point()).sum::<u64>();
 
             let msg = format!(
                 "now <@!{}> has {} genkai point (+{})",

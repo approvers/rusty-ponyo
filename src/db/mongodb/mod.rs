@@ -4,7 +4,10 @@ use {
     crate::{
         bot::{
             alias::{model::MessageAlias, MessageAliasDatabase},
-            genkai_point::{model::Session, GenkaiPointDatabase},
+            genkai_point::{
+                model::{Session, UserStat},
+                GenkaiPointDatabase,
+            },
         },
         db::mongodb::model::{MongoMessageAlias, MongoSession},
     },
@@ -164,7 +167,7 @@ impl GenkaiPointDatabase for MongoDb {
         Ok(())
     }
 
-    async fn get_all_sessions(&self, user_id: u64) -> Result<Vec<Session>> {
+    async fn get_users_all_sessions(&self, user_id: u64) -> Result<Vec<Session>> {
         self.inner
             .collection_with_type::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
             .find(doc! { "user_id": user_id.to_string() }, None)
@@ -208,5 +211,40 @@ impl GenkaiPointDatabase for MongoDb {
             .collect::<Result<_, _>>()
             .await
             .context("failed to retrieve document")
+    }
+
+    async fn get_all_users_stats(&self) -> Result<Vec<UserStat>> {
+        let all_sessions = self
+            .inner
+            .collection_with_type::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
+            .find(None, None)
+            .await
+            .context("failed to find")?
+            .map(|x| x.map(|x| x.into()))
+            .collect::<Result<Vec<Session>, _>>()
+            .await
+            .context("failed to deserialize document")?;
+
+        let mut result: Vec<UserStat> = vec![];
+
+        for session in all_sessions {
+            match result.iter_mut().find(|x| x.user_id == session.user_id) {
+                Some(stat) => {
+                    stat.genkai_point += session.calc_point();
+                    // += is not implemented on chrono::Duration
+                    stat.total_vc_duration = stat.total_vc_duration + session.duration();
+                }
+
+                None => {
+                    result.push(UserStat {
+                        user_id: session.user_id,
+                        genkai_point: session.calc_point(),
+                        total_vc_duration: session.duration(),
+                    });
+                }
+            }
+        }
+
+        Ok(result)
     }
 }

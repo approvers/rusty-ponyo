@@ -37,6 +37,7 @@ pub(crate) struct SendAttachment<'a> {
 #[async_trait]
 pub(crate) trait Context: ThreadSafe {
     async fn send_message(&self, msg: SendMessage<'_>) -> Result<()>;
+    async fn get_user_name(&self, user_id: u64) -> Result<String>;
 }
 
 #[async_trait]

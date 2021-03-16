@@ -1,9 +1,14 @@
 use {
-    anyhow::{bail, Result},
     chrono::{DateTime, Duration, Timelike, Utc},
     chrono_tz::Asia::Tokyo,
     serde::Serialize,
 };
+
+pub(crate) struct UserStat {
+    pub(crate) user_id: u64,
+    pub(crate) genkai_point: u64,
+    pub(crate) total_vc_duration: Duration,
+}
 
 #[derive(Clone, Serialize)]
 pub(crate) struct Session {
@@ -13,28 +18,20 @@ pub(crate) struct Session {
 }
 
 impl Session {
-    pub(crate) fn calc_point(&self) -> Result<u64> {
-        if self.left_at.is_none() {
-            bail!("this session is not finished yet.");
-        }
-
+    pub(crate) fn calc_point(&self) -> u64 {
         let joined_at = self.joined_at.with_timezone(&Tokyo);
-        let left_at = self.left_at.unwrap();
+        let left_at = self.left_at.unwrap_or_else(|| Utc::now());
 
-        Ok((1..)
+        (1..)
             .map(|x| joined_at + Duration::hours(x))
             .take_while(|x| *x <= left_at)
             .map(|x| x.hour())
             .map(hour_to_point)
-            .sum())
+            .sum()
     }
 
-    pub(crate) fn duration(&self) -> Result<Duration> {
-        if self.left_at.is_none() {
-            bail!("this session is not finished yet.");
-        }
-
-        Ok(self.left_at.unwrap() - self.joined_at)
+    pub(crate) fn duration(&self) -> Duration {
+        self.left_at.unwrap_or_else(|| Utc::now()) - self.joined_at
     }
 }
 
@@ -82,7 +79,7 @@ fn session_test() {
                         .with_timezone(&Utc),
                 ),
             };
-            assert_eq!(session.calc_point().unwrap(), $point);
+            assert_eq!(session.calc_point(), $point);
         }};
     }
 
