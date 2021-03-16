@@ -1,6 +1,6 @@
 [package]
 name = "rusty-ponyo"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["kawaemon <34652535+kawaemon@users.noreply.github.com>"]
 edition = "2018"
 
@@ -14,7 +14,7 @@ memory_db = []
 dev = ["memory_db", "console_client"]
 prod = ["mongo_db", "discord_client"]
 
-default = ["dev"]
+default = ["mongo_db", "discord_client"]
 
 
 [dependencies]
