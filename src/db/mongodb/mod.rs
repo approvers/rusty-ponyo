@@ -41,12 +41,9 @@ const MESSAGE_ALIAS_COLLECTION_NAME: &str = "MessageAlias";
 #[async_trait]
 impl MessageAliasDatabase for MongoDb {
     async fn save(&mut self, alias: MessageAlias) -> Result<()> {
-        let alias: MongoMessageAlias = alias.into();
-        let doc = bson::to_document(&alias).context("failed to serialize alias")?;
-
         self.inner
-            .collection(MESSAGE_ALIAS_COLLECTION_NAME)
-            .insert_one(doc, None)
+            .collection_with_type::<MongoMessageAlias>(MESSAGE_ALIAS_COLLECTION_NAME)
+            .insert_one(alias.into(), None)
             .await
             .context("failed to insert new alias")?;
 
@@ -55,14 +52,11 @@ impl MessageAliasDatabase for MongoDb {
 
     async fn get(&self, key: &str) -> Result<Option<MessageAlias>> {
         self.inner
-            .collection(MESSAGE_ALIAS_COLLECTION_NAME)
+            .collection_with_type::<MongoMessageAlias>(MESSAGE_ALIAS_COLLECTION_NAME)
             .find_one(doc! { "key": key }, None)
             .await
-            .context("failed to fetch alias")?
-            .map(bson::from_document::<MongoMessageAlias>)
-            .transpose()
-            .context("failed to deserialize alias")
             .map(|x| x.map(|x| x.into()))
+            .context("failed to deserialize alias")
     }
 
     async fn len(&self) -> Result<u32> {
@@ -117,11 +111,9 @@ impl GenkaiPointDatabase for MongoDb {
         }
         .into();
 
-        let doc = bson::to_document(&session).context("failed to serialize session")?;
-
         self.inner
-            .collection(GENKAI_POINT_COLLECTION_NAME)
-            .insert_one(doc, None)
+            .collection_with_type::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
+            .insert_one(session, None)
             .await
             .context("failed to insert document")?;
 
@@ -178,7 +170,7 @@ impl GenkaiPointDatabase for MongoDb {
 
     async fn get_all_closed_sessions(&self, user_id: u64) -> Result<Vec<Session>> {
         self.inner
-            .collection(GENKAI_POINT_COLLECTION_NAME)
+            .collection_with_type::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
             .find(
                 doc! {
                     "user_id": user_id.to_string(),
@@ -188,19 +180,14 @@ impl GenkaiPointDatabase for MongoDb {
             )
             .await
             .context("failed to find")?
-            .collect::<Result<Vec<_>, _>>()
+            .map(|x| x.map(|x| x.into()))
+            .collect::<Result<_, _>>()
             .await
-            .context("failed to retrieve document")?
-            .into_iter()
-            .map(bson::from_document)
-            .map(|x| x.map(MongoSession::into))
-            .collect::<Result<Vec<_>, _>>()
-            .context("failed to deserialize document")
+            .context("failed to deserialize session")
     }
 
     async fn get_all_users_who_has_unclosed_session(&self) -> Result<Vec<u64>> {
-        let list = self
-            .inner
+        self.inner
             .collection(GENKAI_POINT_COLLECTION_NAME)
             .aggregate(
                 vec![
@@ -220,18 +207,16 @@ impl GenkaiPointDatabase for MongoDb {
             )
             .await
             .context("failed to aggregate")?
-            .collect::<Result<Vec<_>, _>>()
-            .await
-            .context("failed to retrieve document")?
-            .into_iter()
             .map(|x| {
-                x.get_str("user_id")
-                    .context("this aggregation must return user_id")?
-                    .parse()
-                    .context("user_id must be valid number")
+                x.context("failed to deserialize document").and_then(|x| {
+                    x.get_str("user_id")
+                        .context("this aggregation must return user_id")?
+                        .parse::<u64>()
+                        .context("user_id must be valid number")
+                })
             })
-            .collect::<Result<_, _>>()?;
-
-        Ok(list)
+            .collect::<Result<_, _>>()
+            .await
+            .context("failed to retrieve document")
     }
 }

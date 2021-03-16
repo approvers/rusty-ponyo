@@ -9,7 +9,7 @@ use {
     serde::{Deserialize, Serialize},
 };
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub(super) struct MongoMessageAlias {
     pub(super) key: String,
     pub(super) message: String,
@@ -39,7 +39,7 @@ impl Into<MessageAlias> for MongoMessageAlias {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub(super) struct MongoMessageAliasAttachment {
     pub(super) name: String,
     pub(super) data: Binary,
@@ -66,7 +66,7 @@ impl Into<MessageAliasAttachment> for MongoMessageAliasAttachment {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub(super) struct MongoSession {
     user_id: String,
     joined_at: DateTime,
