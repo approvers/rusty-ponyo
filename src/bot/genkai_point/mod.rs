@@ -70,18 +70,18 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
                     .sum::<Result<u64>>()
                     .context("failed to calculate genkai point")?;
 
-                let vc_min = sessions
+                let vc_hour = sessions
                     .iter()
                     .map(|x| x.duration())
-                    .map(|x| x.map(|x| (x.num_seconds() as f64) / 60.))
+                    .map(|x| x.map(|x| (x.num_seconds() as f64) / 60. / 60.))
                     .sum::<Result<f64>>()
                     .context("failed to get vc duration")?;
 
                 Some(format!(
-                    "```\n{name}\n  - points: {points}\n  - total vc duration: {vc_min:.2} min \n```",
+                    "```\n{name}\n  - points: {points}\n  - total vc duration: {vc_hour:.2} h \n```",
                     name = msg.author().name(),
                     points = points,
-                    vc_min = vc_min
+                    vc_hour = vc_hour
                 ))
             }
 
