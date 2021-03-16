@@ -13,7 +13,11 @@ use {
     },
     anyhow::{bail, Context as _, Result},
     async_trait::async_trait,
-    mongodb::{bson::doc, options::ClientOptions, Client, Database},
+    mongodb::{
+        bson::{self, doc, Bson},
+        options::ClientOptions,
+        Client, Database,
+    },
     tokio_stream::StreamExt,
 };
 
@@ -214,20 +218,45 @@ impl GenkaiPointDatabase for MongoDb {
     }
 
     async fn get_all_users_stats(&self) -> Result<Vec<UserStat>> {
-        let all_sessions = self
+        let aggregation_result = self
             .inner
-            .collection_with_type::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
-            .find(None, None)
+            .collection(GENKAI_POINT_COLLECTION_NAME)
+            .aggregate(
+                Some(doc! {
+                    "$group": {
+                        "_id": null,
+                        "items": {
+                            "$push": {
+                                "user_id": "$user_id",
+                                "joined_at": "$joined_at",
+                                "left_at": "$left_at"
+                            }
+                        }
+                    }
+                }),
+                None,
+            )
             .await
             .context("failed to find")?
-            .map(|x| x.map(|x| x.into()))
-            .collect::<Result<Vec<Session>, _>>()
+            .next()
             .await
-            .context("failed to deserialize document")?;
+            .context("aggregate should return document")?
+            .context("failed to deserialize document")?
+            .remove("items")
+            .context("aggregate should return items field")?;
+
+        let all_sessions = match aggregation_result {
+            Bson::Array(array) => array.into_iter().map(bson::from_bson::<MongoSession>),
+            _ => bail!("aggregation should return array in items field"),
+        };
 
         let mut result: Vec<UserStat> = vec![];
 
         for session in all_sessions {
+            let session: Session = session
+                .context("failed to deserialize items in items field")?
+                .into();
+
             match result.iter_mut().find(|x| x.user_id == session.user_id) {
                 Some(stat) => {
                     stat.genkai_point += session.calc_point();

@@ -80,8 +80,12 @@ impl EvHandler {
     }
 
     // TODO: async closure will make this function more comfortable.
-    async fn do_for_each_service<'a, F>(inner: &'a EvHandlerInner, op: &'static str, f: F)
-    where
+    async fn do_for_each_service<'a, F>(
+        ctx: &'a SerenityContext,
+        inner: &'a EvHandlerInner,
+        op: &'static str,
+        f: F,
+    ) where
         F: Fn(&'a dyn ServiceEntry) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>
             + Send
             + Sync
@@ -97,6 +101,13 @@ impl EvHandler {
                     op,
                     e
                 );
+
+                let _ = SerenityChannelId(APPROVERS_DEFAULT_CHANNEL_ID)
+                    .say(
+                        &ctx,
+                        "unexpected error reported. see log <@!391857452360007680>",
+                    )
+                    .await;
             }
         }
     }
@@ -134,7 +145,7 @@ impl EvHandler {
                 Some(APPROVERS_GUILD_ID),
             );
 
-            Self::do_for_each_service(&inner, "on_vc_data_available", |s| {
+            Self::do_for_each_service(&ctx, &inner, "on_vc_data_available", |s| {
                 Box::pin(s.on_vc_data_available(&converted_ctx, &joined_users))
             })
             .await;
@@ -186,7 +197,7 @@ impl EvHandler {
                 self_state.insert(uid);
                 tracing::info!("user({}) has actually joined to vc", uid.0);
 
-                Self::do_for_each_service(&inner, "on_vc_join", |s| {
+                Self::do_for_each_service(&ctx, &inner, "on_vc_join", |s| {
                     Box::pin(s.on_vc_join(&converted_ctx, uid.0))
                 })
                 .await;
@@ -197,7 +208,7 @@ impl EvHandler {
 
                 self_state.remove(&uid);
 
-                Self::do_for_each_service(&inner, "on_vc_leave", |s| {
+                Self::do_for_each_service(&ctx, &inner, "on_vc_leave", |s| {
                     Box::pin(s.on_vc_leave(&converted_ctx, uid.0))
                 })
                 .await;
@@ -243,7 +254,7 @@ impl EventHandler for EvHandler {
 
                 self_state.insert(user_id);
 
-                Self::do_for_each_service(&self.inner, "on_vc_join", |s| {
+                Self::do_for_each_service(&ctx, &self.inner, "on_vc_join", |s| {
                     Box::pin(s.on_vc_join(&converted_ctx, user_id.0))
                 })
                 .await;
@@ -255,7 +266,7 @@ impl EventHandler for EvHandler {
 
                 self_state.remove(&user_id);
 
-                Self::do_for_each_service(&self.inner, "on_vc_leave", |s| {
+                Self::do_for_each_service(&ctx, &self.inner, "on_vc_leave", |s| {
                     Box::pin(s.on_vc_leave(&converted_ctx, user_id.0))
                 })
                 .await;

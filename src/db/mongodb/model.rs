@@ -68,11 +68,11 @@ impl Into<MessageAliasAttachment> for MongoMessageAliasAttachment {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(super) struct MongoSession {
-    user_id: String,
-    joined_at: DateTime,
+    pub(super) user_id: String,
+    pub(super) joined_at: DateTime,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    left_at: Option<DateTime>,
+    pub(super) left_at: Option<DateTime>,
 }
 
 impl From<Session> for MongoSession {
