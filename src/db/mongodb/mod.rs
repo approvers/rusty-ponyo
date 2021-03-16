@@ -10,11 +10,7 @@ use {
     },
     anyhow::{bail, Context as _, Result},
     async_trait::async_trait,
-    mongodb::{
-        bson::{self, doc},
-        options::ClientOptions,
-        Client, Database,
-    },
+    mongodb::{bson::doc, options::ClientOptions, Client, Database},
     tokio_stream::StreamExt,
 };
 
