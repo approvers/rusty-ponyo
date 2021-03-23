@@ -6,7 +6,10 @@ use {
     },
     anyhow::Result,
     async_trait::async_trait,
-    std::io::{stdin, stdout, Write},
+    std::{
+        io::{stdin, stdout, Write},
+        time::Instant,
+    },
 };
 
 pub(crate) struct ConsoleClient {
@@ -81,9 +84,11 @@ impl ConsoleClient {
             for service in &self.services {
                 let ctx = ConsoleContext {
                     service_name: service.name(),
+                    begin: Instant::now(),
                 };
 
                 let result = service.on_message(&message, &ctx).await;
+
                 if let Err(e) = result {
                     println!(
                         "(ConsoleClient): error occur while calling service: {:?}",
@@ -143,12 +148,18 @@ impl Attachment for ConsoleAttachment<'_> {
 
 struct ConsoleContext {
     service_name: &'static str,
+    begin: Instant,
 }
 
 #[async_trait]
 impl Context for ConsoleContext {
     async fn send_message(&self, msg: SendMessage<'_>) -> Result<()> {
-        println!("({}): {}", self.service_name, msg.content);
+        println!(
+            "({}, {}ms): {}",
+            self.service_name,
+            self.begin.elapsed().as_millis(),
+            msg.content
+        );
 
         if !msg.attachments.is_empty() {
             println!(

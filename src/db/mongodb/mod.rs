@@ -218,41 +218,16 @@ impl GenkaiPointDatabase for MongoDb {
     }
 
     async fn get_all_users_stats(&self) -> Result<Vec<UserStat>> {
-        let aggregation_result = self
+        let mut stream = self
             .inner
-            .collection(GENKAI_POINT_COLLECTION_NAME)
-            .aggregate(
-                Some(doc! {
-                    "$group": {
-                        "_id": null,
-                        "items": {
-                            "$push": {
-                                "user_id": "$user_id",
-                                "joined_at": "$joined_at",
-                                "left_at": "$left_at"
-                            }
-                        }
-                    }
-                }),
-                None,
-            )
+            .collection_with_type::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
+            .find(None, None)
             .await
-            .context("failed to find")?
-            .next()
-            .await
-            .context("aggregate should return document")?
-            .context("failed to deserialize document")?
-            .remove("items")
-            .context("aggregate should return items field")?;
-
-        let all_sessions = match aggregation_result {
-            Bson::Array(array) => array.into_iter().map(bson::from_bson::<MongoSession>),
-            _ => bail!("aggregation should return array in items field"),
-        };
+            .context("failed to find")?;
 
         let mut result: Vec<UserStat> = vec![];
 
-        for session in all_sessions {
+        while let Some(session) = stream.next().await {
             let session: Session = session
                 .context("failed to deserialize items in items field")?
                 .into();
