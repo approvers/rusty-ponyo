@@ -2,7 +2,7 @@ use {
     crate::bot::{
         alias::{model::MessageAlias, MessageAliasDatabase},
         genkai_point::{
-            model::{Session, UserStat},
+            model::{Session, UserStat, GENKAI_POINT_MAX},
             GenkaiPointDatabase,
         },
     },
@@ -155,9 +155,15 @@ impl GenkaiPointDatabase for MemoryDB {
                         user_id: session.user_id,
                         genkai_point: session.calc_point(),
                         total_vc_duration: session.duration(),
+                        efficiency: 0.0,
                     });
                 }
             }
+        }
+
+        for stat in &mut result {
+            stat.efficiency = (stat.genkai_point as f64 / GENKAI_POINT_MAX as f64)
+                / (stat.total_vc_duration.num_minutes() as f64 / 60.0);
         }
 
         Ok(result)
