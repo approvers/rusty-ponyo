@@ -66,10 +66,11 @@ impl<D: GenkaiPointDatabase> GenkaiPointBot<D> {
                 .context("failed to get username")?;
 
             result.push(format!(
-                "#{:02} {:4}pt. {:4.2}h {}",
+                "#{:02} {:5}pt. {:>7.2}h {:>5.2}%限界 {}",
                 index + 1,
                 stat.genkai_point,
                 (stat.total_vc_duration.num_seconds() as f64) / 3600.,
+                stat.efficiency * 100.0,
                 username
             ))
         }

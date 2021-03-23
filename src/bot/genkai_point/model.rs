@@ -4,10 +4,15 @@ use {
     serde::Serialize,
 };
 
+#[allow(dead_code)]
+pub(crate) const GENKAI_POINT_MIN: u64 = 0;
+pub(crate) const GENKAI_POINT_MAX: u64 = 10;
+
 pub(crate) struct UserStat {
     pub(crate) user_id: u64,
     pub(crate) genkai_point: u64,
     pub(crate) total_vc_duration: Duration,
+    pub(crate) efficiency: f64,
 }
 
 #[derive(Clone, Serialize)]
@@ -87,4 +92,13 @@ fn session_test() {
     session_test!(from 2021/3/1 23:39:00 to 2021/3/2 00:40:00 gives 7 point);
     session_test!(from 2021/3/1 00:00:00 to 2021/3/2 00:00:00 gives 76 point);
     session_test!(from 2021/3/1 00:10:00 to 2021/3/1 00:20:00 gives 0 point);
+}
+
+#[test]
+fn point_min_max_test() {
+    assert!(GENKAI_POINT_MIN < GENKAI_POINT_MAX);
+
+    for point in (0..=23).map(hour_to_point) {
+        assert!(!(GENKAI_POINT_MIN < point && point < GENKAI_POINT_MAX))
+    }
 }

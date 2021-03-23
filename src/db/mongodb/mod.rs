@@ -5,7 +5,7 @@ use {
         bot::{
             alias::{model::MessageAlias, MessageAliasDatabase},
             genkai_point::{
-                model::{Session, UserStat},
+                model::{Session, UserStat, GENKAI_POINT_MAX},
                 GenkaiPointDatabase,
             },
         },
@@ -13,11 +13,7 @@ use {
     },
     anyhow::{bail, Context as _, Result},
     async_trait::async_trait,
-    mongodb::{
-        bson::{self, doc, Bson},
-        options::ClientOptions,
-        Client, Database,
-    },
+    mongodb::{bson::doc, options::ClientOptions, Client, Database},
     tokio_stream::StreamExt,
 };
 
@@ -244,9 +240,15 @@ impl GenkaiPointDatabase for MongoDb {
                         user_id: session.user_id,
                         genkai_point: session.calc_point(),
                         total_vc_duration: session.duration(),
+                        efficiency: 0.0,
                     });
                 }
             }
+        }
+
+        for stat in &mut result {
+            stat.efficiency = (stat.genkai_point as f64 / GENKAI_POINT_MAX as f64)
+                / (stat.total_vc_duration.num_minutes() as f64 / 60.0);
         }
 
         Ok(result)
