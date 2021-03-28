@@ -134,18 +134,7 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
                 ))
             }
 
-            #[rustfmt::skip]
-            [_, ..] => Some(
-r#"```asciidoc
-= rusty_ponyo::genkai_point =
-g!point [subcommand] [args...]
-
-= subcommands =
-    help                        :: この文を出します
-    show                        :: あなたの限界ポイントなどを出します
-    ranking [duration or point] :: ランキングを出します
-```"#.into()
-            ),
+            [_, ..] => Some(include_str!("help_text.txt").into()),
         };
 
         if let Some(msg) = msg {
