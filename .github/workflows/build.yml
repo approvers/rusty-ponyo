@@ -27,3 +27,6 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           args: --no-default-features --features prod
+
+      - name: test
+        run: cargo test
