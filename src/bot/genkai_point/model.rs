@@ -25,7 +25,7 @@ pub(crate) struct Session {
 impl Session {
     pub(crate) fn calc_point(&self) -> u64 {
         let joined_at = self.joined_at.with_timezone(&Tokyo);
-        let left_at = self.left_at.unwrap_or_else(|| Utc::now());
+        let left_at = self.left_at.unwrap_or_else(Utc::now);
 
         (1..)
             .map(|x| joined_at + Duration::hours(x))
@@ -36,7 +36,7 @@ impl Session {
     }
 
     pub(crate) fn duration(&self) -> Duration {
-        self.left_at.unwrap_or_else(|| Utc::now()) - self.joined_at
+        self.left_at.unwrap_or_else(Utc::now) - self.joined_at
     }
 }
 

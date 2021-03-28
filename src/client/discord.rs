@@ -427,7 +427,7 @@ impl Context for DiscordContext {
         let hit = CACHE.read().await.get(&(self.guild_id, user_id)).cloned();
 
         if let Some(hit) = hit {
-            return Ok(hit.clone());
+            return Ok(hit);
         }
 
         let user = user_id
