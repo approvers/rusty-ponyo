@@ -133,11 +133,11 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
 
                 match stat {
                     Some(stat) => Some(format!(
-                        "```\n{name}\n  - 限界ポイント: {points}\n  - 合計VC時間: {vc_hour:.2}h\n\n  - 限界効率: {efficiency:.2}\n```",
+                        "```\n{name}\n  - 限界ポイント: {points}\n  - 合計VC時間: {vc_hour:.2}h\n  - 限界効率: {efficiency:.2}%\n```",
                         name = msg.author().name(),
                         points = stat.genkai_point,
                         vc_hour = stat.total_vc_duration.num_minutes() as f64 / 60.0,
-                        efficiency = stat.efficiency,
+                        efficiency = stat.efficiency * 100.0,
                     )),
 
                     None => Some(format!("{}の限界ポイントに関する情報は見つかりませんでした", msg.author().name()))
