@@ -11,7 +11,7 @@ use {
     anyhow::{Context as _, Result},
     async_trait::async_trait,
     chrono::{DateTime, Utc},
-    std::marker::PhantomData,
+    std::{cmp::Ordering, marker::PhantomData},
 };
 
 #[async_trait]
@@ -34,16 +34,15 @@ impl<D: GenkaiPointDatabase> GenkaiPointBot<D> {
         Self(PhantomData)
     }
 
-    async fn ranking<F, O>(
+    async fn ranking<C>(
         &self,
         db: &Synced<D>,
         ctx: &dyn Context,
         sort_msg: &str,
-        sort_key_selector: F,
+        comparator: C,
     ) -> Result<String>
     where
-        F: Fn(&UserStat) -> O,
-        O: Ord,
+        C: Fn(&UserStat, &UserStat) -> Ordering,
     {
         let mut ranking = db
             .read()
@@ -52,8 +51,8 @@ impl<D: GenkaiPointDatabase> GenkaiPointBot<D> {
             .await
             .context("failed to fetch ranking")?;
 
-        ranking.sort_by_key(|x| x.user_id);
-        ranking.sort_by_key(sort_key_selector);
+        ranking.sort_unstable_by_key(|x| x.user_id);
+        ranking.sort_by(comparator);
 
         let mut result = vec!["```".to_string(), sort_msg.to_string()];
 
@@ -99,14 +98,27 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
         let msg = match tokens.as_slice() {
             [] => None,
 
-            [PREFIX, "ranking", "duration"] => Some(
-                self.ranking(db, ctx, "sorted by vc duration", |x| x.total_vc_duration)
-                    .await?,
+            [PREFIX, "ranking"] | [PREFIX, "ranking", "point"] => Some(
+                self.ranking(db, ctx, "sorted by genkai point", |a, b| {
+                    a.genkai_point.partial_cmp(&b.genkai_point).unwrap()
+                })
+                .await?,
             ),
 
-            [PREFIX, "ranking", "point"] | [PREFIX, "ranking"] => Some(
-                self.ranking(db, ctx, "sorted by genkai point", |x| x.genkai_point)
-                    .await?,
+            [PREFIX, "ranking", "duration"] => Some(
+                self.ranking(db, ctx, "sorted by vc duration", |a, b| {
+                    a.total_vc_duration
+                        .partial_cmp(&b.total_vc_duration)
+                        .unwrap()
+                })
+                .await?,
+            ),
+
+            [PREFIX, "ranking", "efficiency"] => Some(
+                self.ranking(db, ctx, "sorted by genkai efficiency", |a, b| {
+                    a.efficiency.partial_cmp(&b.efficiency).unwrap()
+                })
+                .await?,
             ),
 
             [PREFIX, "show", ..] | ["限界ポイント"] => {
