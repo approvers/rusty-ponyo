@@ -98,19 +98,18 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
 
         let msg = match tokens.as_slice() {
             [] => None,
-            [maybe_prefix, ..] if *maybe_prefix != PREFIX => None,
 
-            [_, "ranking", "duration"] => Some(
+            [PREFIX, "ranking", "duration"] => Some(
                 self.ranking(db, ctx, "sorted by vc duration", |x| x.total_vc_duration)
                     .await?,
             ),
 
-            [_, "ranking", "point"] | [_, "ranking"] => Some(
+            [PREFIX, "ranking", "point"] | [PREFIX, "ranking"] => Some(
                 self.ranking(db, ctx, "sorted by genkai point", |x| x.genkai_point)
                     .await?,
             ),
 
-            [_, "show", ..] | [_, "限界ポイント", ..] => {
+            [PREFIX, "show", ..] | ["限界ポイント"] => {
                 let sessions = db
                     .read()
                     .await
@@ -134,7 +133,8 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
                 ))
             }
 
-            [_, ..] => Some(include_str!("help_text.txt").into()),
+            [PREFIX, ..] => Some(include_str!("help_text.txt").into()),
+            _ => None,
         };
 
         if let Some(msg) = msg {
