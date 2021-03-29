@@ -14,6 +14,7 @@ use {
     anyhow::{bail, Context as _, Result},
     async_trait::async_trait,
     mongodb::{bson::doc, options::ClientOptions, Client, Database},
+    hashbrown::HashMap,
     tokio_stream::StreamExt,
 };
 
@@ -141,11 +142,7 @@ impl GenkaiPointDatabase for MongoDb {
         Ok(exists)
     }
 
-    async fn close_session(
-        &mut self,
-        user_id: u64,
-        left_at: chrono::DateTime<chrono::Utc>,
-    ) -> Result<()> {
+    async fn close_session(&mut self, user_id: u64, left_at: DateTime<Utc>) -> Result<()> {
         let collection = self.inner.collection(GENKAI_POINT_COLLECTION_NAME);
 
         let result = collection
@@ -221,36 +218,21 @@ impl GenkaiPointDatabase for MongoDb {
             .await
             .context("failed to find")?;
 
-        let mut result: Vec<UserStat> = vec![];
+        let mut user_sessions = HashMap::new();
 
         while let Some(session) = stream.next().await {
-            let session: Session = session
-                .context("failed to deserialize items in items field")?
-                .into();
+            let session: Session = session.context("failed to deserialize document")?.into();
 
-            match result.iter_mut().find(|x| x.user_id == session.user_id) {
-                Some(stat) => {
-                    stat.genkai_point += session.calc_point();
-                    // += is not implemented on chrono::Duration
-                    stat.total_vc_duration = stat.total_vc_duration + session.duration();
-                }
-
-                None => {
-                    result.push(UserStat {
-                        user_id: session.user_id,
-                        genkai_point: session.calc_point(),
-                        total_vc_duration: session.duration(),
-                        efficiency: 0.0,
-                    });
-                }
-            }
+            user_sessions
+                .entry(session.user_id)
+                .or_insert_with(Vec::new)
+                .push(session);
         }
 
-        for stat in &mut result {
-            stat.efficiency = (stat.genkai_point as f64 / GENKAI_POINT_MAX as f64)
-                / (stat.total_vc_duration.num_minutes() as f64 / 60.0);
-        }
-
-        Ok(result)
+        user_sessions
+            .iter()
+            .flat_map(|(_, x)| UserStat::from_sessions(x).transpose())
+            .collect::<Result<Vec<_>, _>>()
+            .context("failed to calc userstat")
     }
 }
