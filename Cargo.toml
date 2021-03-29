@@ -46,7 +46,3 @@ features = ["rt-multi-thread", "parking_lot", "fs"]
 [dependencies.mongodb]
 version = "2.0.0-alpha"
 optional = true
-
-[profile.release]
-lto = true
-codegen-units = 1
