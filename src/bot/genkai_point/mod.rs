@@ -17,14 +17,25 @@ use {
 #[async_trait]
 pub(crate) trait GenkaiPointDatabase: ThreadSafe {
     /// Creates a new unclosed session if not exists.
+    /// If the user's last session was closed before within 5minutes from now, clear its "left_at" field.
     /// If an unclosed session exists, leaves it untouched.
-    /// Returns whether it's created.
-    async fn create_new_session(&mut self, user_id: u64, joined_at: DateTime<Utc>) -> Result<bool>;
+    async fn create_new_session(
+        &mut self,
+        user_id: u64,
+        joined_at: DateTime<Utc>,
+    ) -> Result<CreateNewSessionResult>;
     async fn unclosed_session_exists(&self, user_id: u64) -> Result<bool>;
     async fn close_session(&mut self, user_id: u64, left_at: DateTime<Utc>) -> Result<()>;
     async fn get_users_all_sessions(&self, user_id: u64) -> Result<Vec<Session>>;
     async fn get_all_users_who_has_unclosed_session(&self) -> Result<Vec<u64>>;
     async fn get_all_users_stats(&self) -> Result<Vec<UserStat>>;
+}
+
+#[derive(Debug)]
+pub(crate) enum CreateNewSessionResult {
+    CreatedNewSession,
+    UnclosedSessionExists,
+    SessionResumed,
 }
 
 pub(crate) struct GenkaiPointBot<D>(PhantomData<fn() -> D>);
@@ -166,11 +177,14 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
         _ctx: &dyn Context,
         user_id: u64,
     ) -> Result<()> {
-        db.write()
+        let op = db
+            .write()
             .await
             .create_new_session(user_id, Utc::now())
             .await
             .context("failed to create new session")?;
+
+        tracing::debug!("create_new_session(user_id: {}) -> op: {:?}", user_id, op);
 
         Ok(())
     }
@@ -224,17 +238,23 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
         joined_user_ids: &[u64],
     ) -> Result<()> {
         for uid in joined_user_ids {
-            let created = db
+            let op = db
                 .write()
                 .await
                 .create_new_session(*uid, Utc::now())
                 .await
                 .context("failed to create new session")?;
 
-            if !created {
-                tracing::info!("User({}) already has unclosed session in db", uid);
-            } else {
-                tracing::info!("User({}) has joined to vc in bot downtime", uid);
+            use CreateNewSessionResult::*;
+
+            match op {
+                CreatedNewSession | SessionResumed => {
+                    tracing::info!("User({}) has joined to vc in bot downtime", uid);
+                }
+
+                UnclosedSessionExists => {
+                    tracing::info!("User({}) already has unclosed session in db", uid);
+                }
             }
         }
 

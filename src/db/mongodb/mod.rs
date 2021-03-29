@@ -6,15 +6,20 @@ use {
             alias::{model::MessageAlias, MessageAliasDatabase},
             genkai_point::{
                 model::{Session, UserStat, GENKAI_POINT_MAX},
-                GenkaiPointDatabase,
+                CreateNewSessionResult, GenkaiPointDatabase,
             },
         },
         db::mongodb::model::{MongoMessageAlias, MongoSession},
     },
     anyhow::{bail, Context as _, Result},
     async_trait::async_trait,
-    mongodb::{bson::doc, options::ClientOptions, Client, Database},
+    chrono::{DateTime, Duration, Utc},
     hashbrown::HashMap,
+    mongodb::{
+        bson::{self, doc, oid::ObjectId},
+        options::ClientOptions,
+        Client, Database,
+    },
     tokio_stream::StreamExt,
 };
 
@@ -88,20 +93,92 @@ impl MessageAliasDatabase for MongoDb {
 
 const GENKAI_POINT_COLLECTION_NAME: &str = "GenkaiPoint";
 
+struct SessionWithDocId {
+    doc_id: ObjectId,
+    session: Session,
+}
+
+impl MongoDb {
+    async fn genkai_point_get_last_user_session(
+        &self,
+        user_id: u64,
+    ) -> Result<Option<SessionWithDocId>> {
+        self.inner
+            .collection(GENKAI_POINT_COLLECTION_NAME)
+            .aggregate(
+                vec![
+                    doc! { "$match": { "user_id": user_id.to_string() } },
+                    doc! { "$sort": { "joined_at": -1 } },
+                ],
+                None,
+            )
+            .await
+            .context("failed to aggregate")?
+            .next()
+            .await
+            .map(|x| {
+                x.context("failed to deserialize document").and_then(|x| {
+                    let did = x
+                        .get_object_id("_id")
+                        .context("Document ID (_id field) not found")?
+                        .clone();
+
+                    bson::from_document::<MongoSession>(x)
+                        .map(|x| SessionWithDocId {
+                            doc_id: did,
+                            session: x.into(),
+                        })
+                        .context("failed to deserialize document")
+                })
+            })
+            .transpose()
+    }
+}
+
 #[async_trait]
 impl GenkaiPointDatabase for MongoDb {
     async fn create_new_session(
         &mut self,
         user_id: u64,
-        joined_at: chrono::DateTime<chrono::Utc>,
-    ) -> Result<bool> {
+        joined_at: DateTime<Utc>,
+    ) -> Result<CreateNewSessionResult> {
         let already_have_unclosed_session = self
             .unclosed_session_exists(user_id)
             .await
             .context("failed to check that user already has unclosed session")?;
 
         if already_have_unclosed_session {
-            return Ok(false);
+            return Ok(CreateNewSessionResult::UnclosedSessionExists);
+        }
+
+        let last_session = self
+            .genkai_point_get_last_user_session(user_id)
+            .await
+            .context("failed to get last session")?;
+
+        if let Some(SessionWithDocId {
+            doc_id,
+            session:
+                Session {
+                    left_at: Some(left_at),
+                    ..
+                },
+            ..
+        }) = last_session
+        {
+            if (Utc::now() - left_at) < Duration::minutes(5) {
+                self.inner
+                    .collection_with_type::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
+                    .update_one(
+                        doc! { "_id": doc_id },
+                        doc! { "$unset": { "left_at": "" } },
+                        None,
+                    )
+                    .await
+                    .context("failed to unset left_at")?;
+
+                return Ok(CreateNewSessionResult::SessionResumed);
+            }
         }
 
         let session: MongoSession = Session {
@@ -117,7 +194,7 @@ impl GenkaiPointDatabase for MongoDb {
             .await
             .context("failed to insert document")?;
 
-        Ok(true)
+        Ok(CreateNewSessionResult::CreatedNewSession)
     }
 
     async fn unclosed_session_exists(&self, user_id: u64) -> Result<bool> {

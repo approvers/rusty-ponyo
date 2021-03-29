@@ -3,11 +3,12 @@ use {
         alias::{model::MessageAlias, MessageAliasDatabase},
         genkai_point::{
             model::{Session, UserStat, GENKAI_POINT_MAX},
-            GenkaiPointDatabase,
+            CreateNewSessionResult, GenkaiPointDatabase,
         },
     },
     anyhow::{anyhow, Context as _, Result},
     async_trait::async_trait,
+    chrono::{DateTime, Duration, Utc},
     serde::Serialize,
 };
 
@@ -75,10 +76,26 @@ impl GenkaiPointDatabase for MemoryDB {
     async fn create_new_session(
         &mut self,
         user_id: u64,
-        joined_at: chrono::DateTime<chrono::Utc>,
-    ) -> Result<bool> {
+        joined_at: DateTime<Utc>,
+    ) -> Result<CreateNewSessionResult> {
         if self.unclosed_session_exists(user_id).await.unwrap() {
-            return Ok(false);
+            return Ok(CreateNewSessionResult::UnclosedSessionExists);
+        }
+
+        self.sessions.sort_unstable_by_key(|x| x.joined_at);
+
+        if let Some(session) = self
+            .sessions
+            .iter_mut()
+            .rev()
+            .find(|x| x.user_id == user_id)
+        {
+            if let Some(left_at) = session.left_at {
+                if (Utc::now() - left_at) <= Duration::minutes(5) {
+                    session.left_at = None;
+                    return Ok(CreateNewSessionResult::SessionResumed);
+                }
+            }
         }
 
         self.sessions.push(Session {
@@ -89,7 +106,7 @@ impl GenkaiPointDatabase for MemoryDB {
 
         self.dump().await?;
 
-        Ok(true)
+        Ok(CreateNewSessionResult::CreatedNewSession)
     }
 
     async fn unclosed_session_exists(&self, user_id: u64) -> Result<bool> {

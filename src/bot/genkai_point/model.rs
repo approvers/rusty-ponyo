@@ -42,7 +42,7 @@ impl UserStat {
         result.efficiency = (result.genkai_point as f64 / GENKAI_POINT_MAX as f64)
             / (result.total_vc_duration.num_minutes() as f64 / 60.0);
 
-        if result.efficiency.is_nan {
+        if result.efficiency.is_nan() {
             result.efficiency = 0.;
         }
 
