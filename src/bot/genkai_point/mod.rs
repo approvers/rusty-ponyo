@@ -129,20 +129,19 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
                     .await
                     .context("failed to get sessions")?;
 
-                let points = sessions.iter().map(|x| x.calc_point()).sum::<u64>();
+                let stat = UserStat::from_sessions(&sessions).context("failed to get userstat")?;
 
-                let vc_hour = sessions
-                    .iter()
-                    .map(|x| x.duration())
-                    .map(|x| (x.num_seconds() as f64) / 3600.)
-                    .sum::<f64>();
+                match stat {
+                    Some(stat) => Some(format!(
+                        "```\n{name}\n  - 限界ポイント: {points}\n  - 合計VC時間: {vc_hour:.2}h\n\n  - 限界効率: {efficiency:.2}\n```",
+                        name = msg.author().name(),
+                        points = stat.genkai_point,
+                        vc_hour = stat.total_vc_duration.num_minutes() as f64 / 60.0,
+                        efficiency = stat.efficiency,
+                    )),
 
-                Some(format!(
-                    "```\n{name}\n  - points: {points}\n  - total vc duration: {vc_hour:.2} h \n```",
-                    name = msg.author().name(),
-                    points = points,
-                    vc_hour = vc_hour
-                ))
+                    None => Some(format!("{}の限界ポイントに関する情報は見つかりませんでした", msg.author().name()))
+                }
             }
 
             [PREFIX, ..] => Some(include_str!("help_text.txt").into()),
