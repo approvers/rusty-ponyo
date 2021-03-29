@@ -91,8 +91,9 @@ impl GenkaiPointDatabase for MemoryDB {
             .find(|x| x.user_id == user_id)
         {
             if let Some(left_at) = session.left_at {
-                if (Utc::now() - left_at) <= Duration::minutes(5) {
+                if (Utc::now() - left_at) < Duration::minutes(5) {
                     session.left_at = None;
+                    self.dump().await?;
                     return Ok(CreateNewSessionResult::SessionResumed);
                 }
             }
