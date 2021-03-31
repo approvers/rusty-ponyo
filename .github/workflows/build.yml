@@ -29,4 +29,4 @@ jobs:
           args: --no-default-features --features prod
 
       - name: test
-        run: cargo test
+        run: cargo test --no-default-features --features dev
