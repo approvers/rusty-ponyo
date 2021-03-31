@@ -10,8 +10,10 @@ use {
     },
     anyhow::{Context as _, Result},
     async_trait::async_trait,
-    chrono::{DateTime, Utc},
+    chrono::{DateTime, Duration, Utc},
+    once_cell::sync::Lazy,
     std::{cmp::Ordering, marker::PhantomData},
+    tokio::sync::Mutex,
 };
 
 #[async_trait]
@@ -38,11 +40,20 @@ pub(crate) enum CreateNewSessionResult {
     SessionResumed,
 }
 
-pub(crate) struct GenkaiPointBot<D>(PhantomData<fn() -> D>);
+pub(crate) struct GenkaiPointBot<D> {
+    resume_msg_timeout: Mutex<DateTime<Utc>>,
+    phantom: PhantomData<fn() -> D>,
+}
+
+// chrono::Duration::seconds is not const fn yet.
+static RESUME_MSG_TIMEOUT: Lazy<Duration> = Lazy::new(|| Duration::seconds(10));
 
 impl<D: GenkaiPointDatabase> GenkaiPointBot<D> {
     pub(crate) fn new() -> Self {
-        Self(PhantomData)
+        Self {
+            resume_msg_timeout: Mutex::new(Utc::now()),
+            phantom: PhantomData,
+        }
     }
 
     async fn ranking<C>(
@@ -174,7 +185,7 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
     async fn on_vc_join(
         &self,
         db: &Synced<Self::Database>,
-        _ctx: &dyn Context,
+        ctx: &dyn Context,
         user_id: u64,
     ) -> Result<()> {
         let op = db
@@ -185,6 +196,21 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
             .context("failed to create new session")?;
 
         tracing::debug!("create_new_session(user_id: {}) -> op: {:?}", user_id, op);
+
+        if let CreateNewSessionResult::SessionResumed = op {
+            let mut timeout = self.resume_msg_timeout.lock().await;
+            let now = Utc::now();
+
+            if *timeout < now {
+                *timeout = now + *RESUME_MSG_TIMEOUT;
+                ctx.send_message(SendMessage {
+                    content: &format!("Welcome back <@!{}>, your session has resumed!", user_id),
+                    attachments: &[],
+                })
+                .await
+                .context("failed to send message")?;
+            }
+        }
 
         Ok(())
     }
