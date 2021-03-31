@@ -5,7 +5,7 @@ use {
         bot::{
             alias::{model::MessageAlias, MessageAliasDatabase},
             genkai_point::{
-                model::{Session, UserStat, GENKAI_POINT_MAX},
+                model::{Session, UserStat},
                 CreateNewSessionResult, GenkaiPointDatabase,
             },
         },
