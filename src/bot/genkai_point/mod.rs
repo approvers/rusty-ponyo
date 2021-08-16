@@ -100,6 +100,39 @@ impl<D: GenkaiPointDatabase> GenkaiPointBot<D> {
 
         Ok(result.join("\n"))
     }
+
+    async fn show(&self, db: &Synced<D>, ctx: &dyn Context, user_id: u64) -> Result<String> {
+        let username = match ctx.get_user_name(user_id).await {
+            Ok(n) => n,
+            Err(_) => return Ok("ユーザーが見つかりませんでした".into()),
+        };
+
+        let sessions = db
+            .read()
+            .await
+            .get_users_all_sessions(user_id)
+            .await
+            .context("failed to get sessions")?;
+
+        let stat = UserStat::from_sessions(&sessions).context("failed to get userstat")?;
+
+        Ok(match stat {
+            Some(stat) => {
+                format!(
+                    "```\n{name}\n  - 限界ポイント: {points}\n  - 合計VC時間: {vc_hour:.2}h\n  - 限界効率: {efficiency:.2}%\n```",
+                    name = username,
+                    points = stat.genkai_point,
+                    vc_hour = stat.total_vc_duration.num_minutes() as f64 / 60.0,
+                    efficiency = stat.efficiency * 100.0,
+                )
+            }
+
+            None => format!(
+                "{}さんの限界ポイントに関する情報は見つかりませんでした",
+                username
+            ),
+        })
+    }
 }
 
 #[async_trait]
@@ -143,27 +176,13 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
                 .await?,
             ),
 
-            [PREFIX, "show", ..] | ["限界ポイント"] => {
-                let sessions = db
-                    .read()
-                    .await
-                    .get_users_all_sessions(msg.author().id())
-                    .await
-                    .context("failed to get sessions")?;
+            [PREFIX, "show", user_id] => match user_id.parse() {
+                Ok(i) => Some(self.show(db, ctx, i).await?),
+                Err(_) => Some("ユーザーIDのパースに失敗しました".into()),
+            },
 
-                let stat = UserStat::from_sessions(&sessions).context("failed to get userstat")?;
-
-                match stat {
-                    Some(stat) => Some(format!(
-                        "```\n{name}\n  - 限界ポイント: {points}\n  - 合計VC時間: {vc_hour:.2}h\n  - 限界効率: {efficiency:.2}%\n```",
-                        name = msg.author().name(),
-                        points = stat.genkai_point,
-                        vc_hour = stat.total_vc_duration.num_minutes() as f64 / 60.0,
-                        efficiency = stat.efficiency * 100.0,
-                    )),
-
-                    None => Some(format!("{}の限界ポイントに関する情報は見つかりませんでした", msg.author().name()))
-                }
+            [PREFIX, "show"] | ["限界ポイント"] => {
+                Some(self.show(db, ctx, msg.author().id()).await?)
             }
 
             [PREFIX, ..] => Some(include_str!("help_text.txt").into()),

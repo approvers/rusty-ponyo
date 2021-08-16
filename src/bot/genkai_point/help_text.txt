@@ -4,7 +4,7 @@ g!point [subcommand] [args...]
 
 = subcommands =
     help                :: この文を出します
-    show                :: あなたの限界ポイントなどを出します
-    ranking (point)?    :: 限界ポイント順のランキングを出します
+    show (UserID)?      :: ユーザーの限界ポイント情報を出します
+    ranking (Point)?    :: 限界ポイント順のランキングを出します
     ranking duration    :: 合計VC時間順のランキングを出します
 ```
