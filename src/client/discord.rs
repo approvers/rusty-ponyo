@@ -422,9 +422,15 @@ impl Context for DiscordContext {
 
         let user_id = SerenityUserId(user_id);
 
-        let hit = CACHE.read().await.get(&(self.guild_id, user_id)).cloned();
+        let cache_hit = {
+            let cache = CACHE.read().await;
+            cache
+                .get(&(self.guild_id, user_id))
+                .or_else(|| cache.get(&(None, user_id)))
+                .cloned()
+        };
 
-        if let Some(hit) = hit {
+        if let Some(hit) = cache_hit {
             return Ok(hit);
         }
 
@@ -444,7 +450,8 @@ impl Context for DiscordContext {
                     .member(&self.origin, user_id)
                     .await
                     .map(|x| x.nick)
-                    .context("failed to get username from discord")?;
+                    .ok()
+                    .flatten();
 
                 if let Some(ref nick) = nick {
                     CACHE
