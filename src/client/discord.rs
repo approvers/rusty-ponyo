@@ -21,7 +21,7 @@ use {
         },
         prelude::{Client, Context as SerenityContext, EventHandler},
     },
-    std::{future::Future, pin::Pin, sync::Arc, time::Duration},
+    std::{future::Future, sync::Arc, time::Duration},
     tokio::{
         sync::{Mutex, RwLock},
         time::interval,
@@ -83,17 +83,14 @@ impl EvHandler {
         }
     }
 
-    // TODO: async closure will make this function more comfortable.
-    async fn do_for_each_service<'a, F>(
+    async fn do_for_each_service<'a, F, Fu>(
         ctx: &'a SerenityContext,
         inner: &'a EvHandlerInner,
         op: &'static str,
         f: F,
     ) where
-        F: Fn(&'a dyn ServiceEntry) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>
-            + Send
-            + Sync
-            + 'a,
+        Fu: Future<Output = Result<()>> + Send + 'a,
+        F: Fn(&'a dyn ServiceEntry) -> Fu,
     {
         for service in &inner.services {
             let result: Result<()> = f(service.as_ref()).await;
@@ -106,12 +103,13 @@ impl EvHandler {
                     e
                 );
 
-                let _ = SerenityChannelId(APPROVERS_DEFAULT_CHANNEL_ID)
+                SerenityChannelId(APPROVERS_DEFAULT_CHANNEL_ID)
                     .say(
                         &ctx,
                         "unexpected error reported. see log <@!391857452360007680>",
                     )
-                    .await;
+                    .await
+                    .ok();
             }
         }
     }
@@ -150,7 +148,7 @@ impl EvHandler {
             );
 
             Self::do_for_each_service(&ctx, &inner, "on_vc_data_available", |s| {
-                Box::pin(s.on_vc_data_available(&converted_ctx, &joined_users))
+                s.on_vc_data_available(&converted_ctx, &joined_users)
             })
             .await;
 
@@ -202,7 +200,7 @@ impl EvHandler {
                 tracing::info!("user({}) has actually joined to vc", uid.0);
 
                 Self::do_for_each_service(&ctx, &inner, "on_vc_join", |s| {
-                    Box::pin(s.on_vc_join(&converted_ctx, uid.0))
+                    s.on_vc_join(&converted_ctx, uid.0)
                 })
                 .await;
             }
@@ -213,7 +211,7 @@ impl EvHandler {
                 self_state.remove(&uid);
 
                 Self::do_for_each_service(&ctx, &inner, "on_vc_leave", |s| {
-                    Box::pin(s.on_vc_leave(&converted_ctx, uid.0))
+                    s.on_vc_leave(&converted_ctx, uid.0)
                 })
                 .await;
             }
@@ -259,7 +257,7 @@ impl EventHandler for EvHandler {
                 self_state.insert(user_id);
 
                 Self::do_for_each_service(&ctx, &self.inner, "on_vc_join", |s| {
-                    Box::pin(s.on_vc_join(&converted_ctx, user_id.0))
+                    s.on_vc_join(&converted_ctx, user_id.0)
                 })
                 .await;
             }
@@ -271,7 +269,7 @@ impl EventHandler for EvHandler {
                 self_state.remove(&user_id);
 
                 Self::do_for_each_service(&ctx, &self.inner, "on_vc_leave", |s| {
-                    Box::pin(s.on_vc_leave(&converted_ctx, user_id.0))
+                    s.on_vc_leave(&converted_ctx, user_id.0)
                 })
                 .await;
             }
