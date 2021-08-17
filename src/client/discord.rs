@@ -7,7 +7,6 @@ use {
     anyhow::{Context as _, Result},
     async_trait::async_trait,
     hashbrown::{HashMap, HashSet},
-    once_cell::sync::Lazy,
     serenity::{
         http::AttachmentType,
         model::{
@@ -67,6 +66,7 @@ const APPROVERS_DEFAULT_CHANNEL_ID: u64 = 690909527461199922;
 struct EvHandlerInner {
     services: Vec<Box<dyn ServiceEntry>>,
     vc_joined_users: Mutex<HashSet<SerenityUserId>>,
+    nickname_cache: RwLock<NicknameCache>,
 }
 
 struct EvHandler {
@@ -79,6 +79,7 @@ impl EvHandler {
             inner: Arc::new(EvHandlerInner {
                 services,
                 vc_joined_users: Mutex::new(HashSet::new()),
+                nickname_cache: RwLock::new(NicknameCache(HashMap::new())),
             }),
         }
     }
@@ -93,7 +94,7 @@ impl EvHandler {
         F: Fn(&'a dyn ServiceEntry) -> Fu,
     {
         for service in &inner.services {
-            let result: Result<()> = f(service.as_ref()).await;
+            let result = f(service.as_ref()).await;
 
             if let Err(e) = result {
                 tracing::error!(
@@ -145,6 +146,7 @@ impl EvHandler {
                 &ctx,
                 APPROVERS_DEFAULT_CHANNEL_ID,
                 Some(APPROVERS_GUILD_ID),
+                &inner.nickname_cache,
             );
 
             Self::do_for_each_service(&ctx, &inner, "on_vc_data_available", |s| {
@@ -177,6 +179,7 @@ impl EvHandler {
                 &ctx,
                 APPROVERS_DEFAULT_CHANNEL_ID,
                 Some(APPROVERS_GUILD_ID),
+                &inner.nickname_cache,
             );
 
             let mut self_state = inner.vc_joined_users.lock().await;
@@ -247,7 +250,12 @@ impl EventHandler for EvHandler {
 
         let self_state_currently_joined = self_state.iter().any(|x| *x == user_id);
 
-        let converted_ctx = DiscordContext::from_serenity(&ctx, APPROVERS_DEFAULT_CHANNEL_ID, gid);
+        let converted_ctx = DiscordContext::from_serenity(
+            &ctx,
+            APPROVERS_DEFAULT_CHANNEL_ID,
+            gid,
+            &self.inner.nickname_cache,
+        );
 
         match (currently_joined, self_state_currently_joined) {
             // joined
@@ -293,36 +301,37 @@ impl EventHandler for EvHandler {
             .map(DiscordAttachment)
             .collect::<Vec<_>>();
 
+        self.inner
+            .nickname_cache
+            .write()
+            .await
+            .0
+            .insert(message.author.id, message.author.name.clone());
+
         let converted_message = DiscordMessage {
             content: message.content.clone(),
             attachments: converted_attachments.iter().map(|x| x as _).collect(),
             author: DiscordAuthor {
                 id: message.author.id.0,
-                name: message
-                    .author_nick(&ctx)
-                    .await
-                    .unwrap_or(message.author.name),
+                name: message.author.name,
             },
         };
 
-        let converted_context =
-            DiscordContext::from_serenity(&ctx, message.channel_id, message.guild_id);
+        let converted_context = DiscordContext::from_serenity(
+            &ctx,
+            message.channel_id,
+            message.guild_id,
+            &self.inner.nickname_cache,
+        );
 
-        for service in &self.inner.services {
-            let result = service
-                .on_message(&converted_message, &converted_context)
-                .await;
-
-            if let Err(err) = result {
-                tracing::error!(
-                    "Service {} on_message returned error : {:?}",
-                    service.name(),
-                    err
-                );
-            }
-        }
+        Self::do_for_each_service(&ctx, &self.inner, "on_message", |s| {
+            s.on_message(&converted_message, &converted_context)
+        })
+        .await;
     }
 }
+
+struct NicknameCache(HashMap<SerenityUserId, String>);
 
 struct DiscordMessage<'a> {
     content: String,
@@ -376,28 +385,31 @@ impl Attachment for DiscordAttachment<'_> {
 }
 
 #[derive(Clone)]
-struct DiscordContext {
-    origin: SerenityContext,
+struct DiscordContext<'a> {
+    origin: &'a SerenityContext,
     channel_id: SerenityChannelId,
     guild_id: Option<SerenityGuildId>,
+    nickname_cache: &'a RwLock<NicknameCache>,
 }
 
-impl DiscordContext {
+impl<'a> DiscordContext<'a> {
     fn from_serenity(
-        origin: &SerenityContext,
+        origin: &'a SerenityContext,
         channel_id: impl Into<SerenityChannelId>,
         guild_id: Option<impl Into<SerenityGuildId>>,
+        nickname_cache: &'a RwLock<NicknameCache>,
     ) -> Self {
         Self {
-            origin: origin.clone(),
+            origin,
             channel_id: channel_id.into(),
             guild_id: guild_id.map(|x| x.into()),
+            nickname_cache,
         }
     }
 }
 
 #[async_trait]
-impl Context for DiscordContext {
+impl Context for DiscordContext<'_> {
     async fn send_message(&self, msg: SendMessage<'_>) -> Result<()> {
         let files = msg
             .attachments
@@ -417,53 +429,23 @@ impl Context for DiscordContext {
     }
 
     async fn get_user_name(&self, user_id: u64) -> Result<String> {
-        static CACHE: Lazy<RwLock<HashMap<(Option<SerenityGuildId>, SerenityUserId), String>>> =
-            Lazy::new(|| RwLock::new(HashMap::new()));
-
         let user_id = SerenityUserId(user_id);
 
-        let cache_hit = {
-            let cache = CACHE.read().await;
-            cache
-                .get(&(self.guild_id, user_id))
-                .or_else(|| cache.get(&(None, user_id)))
-                .cloned()
-        };
-
-        if let Some(hit) = cache_hit {
-            return Ok(hit);
+        if let Some(nick) = self.nickname_cache.read().await.0.get(&user_id) {
+            return Ok(nick.to_string());
         }
 
         let user = user_id
-            .to_user(&self.origin)
+            .to_user(self.origin)
             .await
-            .context("failed to get discord user")?;
+            .context("failed to get username from discord")?;
 
-        CACHE
+        self.nickname_cache
             .write()
             .await
-            .insert((None, user_id), user.name.clone());
+            .0
+            .insert(user_id, user.name.clone());
 
-        match self.guild_id {
-            Some(gid) => {
-                let nick = gid
-                    .member(&self.origin, user_id)
-                    .await
-                    .map(|x| x.nick)
-                    .ok()
-                    .flatten();
-
-                if let Some(ref nick) = nick {
-                    CACHE
-                        .write()
-                        .await
-                        .insert((Some(gid), user_id), nick.clone());
-                }
-
-                Ok(nick.unwrap_or(user.name))
-            }
-
-            None => Ok(user.name),
-        }
+        return Ok(user.name);
     }
 }
