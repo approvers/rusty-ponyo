@@ -7,4 +7,5 @@ g!point [subcommand] [args...]
     show (UserID)?      :: ユーザーの限界ポイント情報を出します
     ranking (Point)?    :: 限界ポイント順のランキングを出します
     ranking duration    :: 合計VC時間順のランキングを出します
+    ranking efficiency  :: 限界効率順のランキングを出します
 ```
