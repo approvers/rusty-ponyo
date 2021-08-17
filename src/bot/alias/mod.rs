@@ -87,7 +87,7 @@ impl<D: MessageAliasDatabase> MessageAliasBot<D> {
         }
 
         match parsed.sub_command.unwrap() {
-            "help" => return Ok(Some(help())),
+            "help" => Ok(Some(help())),
 
             "delete" => {
                 let key = parsed.args.get(0);
@@ -96,7 +96,7 @@ impl<D: MessageAliasDatabase> MessageAliasBot<D> {
                     return delete(db, key).await.map(Some);
                 }
 
-                return Ok(Some(help()));
+                Ok(Some(help()))
             }
 
             "make" => {
@@ -107,10 +107,10 @@ impl<D: MessageAliasDatabase> MessageAliasBot<D> {
                     return make(db, key, value, message.attachments()).await.map(Some);
                 }
 
-                return Ok(Some(help()));
+                Ok(Some(help()))
             }
 
-            _ => return Ok(Some(help())),
+            _ => Ok(Some(help())),
         }
     }
 }
