@@ -2,7 +2,7 @@ use {
     anyhow::{bail, Result},
     chrono::{DateTime, Duration, Timelike, Utc},
     chrono_tz::Asia::Tokyo,
-    serde::Serialize,
+    serde::{Deserialize, Serialize},
 };
 
 #[allow(dead_code)]
@@ -50,7 +50,7 @@ impl UserStat {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Session {
     pub(crate) user_id: u64,
     pub(crate) joined_at: DateTime<Utc>,

@@ -47,11 +47,21 @@ impl MessageAliasDatabase for MemoryDB {
     }
 
     async fn get(&self, key: &str) -> Result<Option<MessageAlias>> {
-        if let Some(e) = self.aliases.iter().find(|x| x.key == key) {
-            return Ok(Some(e.clone()));
+        Ok(self.aliases.iter().find(|x| x.key == key).cloned())
+    }
+
+    async fn get_and_increment_usage_count(&mut self, key: &str) -> Result<Option<MessageAlias>> {
+        let e = self.get(key).await;
+
+        if let Ok(Some(_)) = e {
+            self.aliases
+                .iter_mut()
+                .find(|x| x.key == key)
+                .unwrap()
+                .usage_count += 1;
         }
 
-        Ok(None)
+        e
     }
 
     async fn delete(&mut self, key: &str) -> Result<bool> {
@@ -68,6 +78,18 @@ impl MessageAliasDatabase for MemoryDB {
 
     async fn len(&self) -> Result<u32> {
         Ok(self.aliases.len() as _)
+    }
+
+    async fn usage_count_top_n(&self, n: usize) -> Result<Vec<MessageAlias>> {
+        let mut p = self.aliases.clone();
+        p.sort_by_key(|x| x.usage_count);
+
+        {
+            // remove unneeded elements
+            p.drain(n..);
+        }
+
+        Ok(p)
     }
 }
 

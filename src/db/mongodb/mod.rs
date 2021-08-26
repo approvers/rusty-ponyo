@@ -64,6 +64,24 @@ impl MessageAliasDatabase for MongoDb {
             .context("failed to deserialize alias")
     }
 
+    async fn get_and_increment_usage_count(&mut self, key: &str) -> Result<Option<MessageAlias>> {
+        let result = self.get(key).await?;
+
+        if result.is_some() {
+            self.inner
+                .collection(MESSAGE_ALIAS_COLLECTION_NAME)
+                .update_one(
+                    doc! { "key": key },
+                    doc! { "$inc": { "usage_count": 1 } },
+                    None,
+                )
+                .await
+                .context("failed to increment usage_count")?;
+        }
+
+        Ok(result)
+    }
+
     async fn len(&self) -> Result<u32> {
         self.inner
             .collection(MESSAGE_ALIAS_COLLECTION_NAME)
@@ -89,13 +107,37 @@ impl MessageAliasDatabase for MongoDb {
             .context("failed to delete alias")
             .map(|x| x.deleted_count == 1)
     }
+
+    async fn usage_count_top_n(&self, n: usize) -> Result<Vec<MessageAlias>> {
+        self.inner
+            .collection_with_type::<MongoMessageAlias>(MESSAGE_ALIAS_COLLECTION_NAME)
+            .aggregate(
+                vec![
+                    doc! { "$sort": { "usage_count": -1 } },
+                    doc! { "$limit": n as i64 },
+                ],
+                None,
+            )
+            .await
+            .context("failed to aggregate top usage counts")?
+            .map(|x| x.map(|x| bson::from_document::<MongoMessageAlias>(x).map(|x| x.into())))
+            .collect::<Result<Result<Vec<_>, _>, _>>()
+            .await
+            .context("failed to decode document")?
+            .context("failed to decode document")
+    }
 }
 
 const GENKAI_POINT_COLLECTION_NAME: &str = "GenkaiPoint";
 
+#[derive(serde::Deserialize)]
+
 struct SessionWithDocId {
+    #[serde(rename = "_id")]
     doc_id: ObjectId,
-    session: Session,
+
+    #[serde(flatten)]
+    session: MongoSession,
 }
 
 impl MongoDb {
@@ -109,6 +151,7 @@ impl MongoDb {
                 vec![
                     doc! { "$match": { "user_id": user_id.to_string() } },
                     doc! { "$sort": { "joined_at": -1 } },
+                    doc! { "$limit": 1 },
                 ],
                 None,
             )
@@ -116,22 +159,11 @@ impl MongoDb {
             .context("failed to aggregate")?
             .next()
             .await
-            .map(|x| {
-                x.context("failed to deserialize document").and_then(|x| {
-                    let did = x
-                        .get_object_id("_id")
-                        .context("Document ID (_id field) not found")?
-                        .clone();
-
-                    bson::from_document::<MongoSession>(x)
-                        .map(|x| SessionWithDocId {
-                            doc_id: did,
-                            session: x.into(),
-                        })
-                        .context("failed to deserialize document")
-                })
+            .pipe(|r| match r {
+                Some(t) => Result::<_, anyhow::Error>::Ok(bson::from_document(t?)?),
+                None => Ok(None),
             })
-            .transpose()
+            .context("failed to deserialize document")
     }
 }
 
@@ -157,27 +189,25 @@ impl GenkaiPointDatabase for MongoDb {
             .context("failed to get last session")?;
 
         if let Some(SessionWithDocId {
-            doc_id,
-            session:
-                Session {
-                    left_at: Some(left_at),
-                    ..
-                },
-            ..
+            doc_id, session, ..
         }) = last_session
         {
-            if (Utc::now() - left_at) < Duration::minutes(5) {
-                self.inner
-                    .collection_with_type::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
-                    .update_one(
-                        doc! { "_id": doc_id },
-                        doc! { "$unset": { "left_at": "" } },
-                        None,
-                    )
-                    .await
-                    .context("failed to unset left_at")?;
+            let session: Session = session.into();
 
-                return Ok(CreateNewSessionResult::SessionResumed);
+            if let Some(left_at) = session.left_at {
+                if (Utc::now() - left_at) < Duration::minutes(5) {
+                    self.inner
+                        .collection_with_type::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
+                        .update_one(
+                            doc! { "_id": doc_id },
+                            doc! { "$unset": { "left_at": "" } },
+                            None,
+                        )
+                        .await
+                        .context("failed to unset left_at")?;
+
+                    return Ok(CreateNewSessionResult::SessionResumed);
+                }
             }
         }
 
@@ -311,5 +341,34 @@ impl GenkaiPointDatabase for MongoDb {
             .flat_map(|(_, x)| UserStat::from_sessions(x).transpose())
             .collect::<Result<Vec<_>, _>>()
             .context("failed to calc userstat")
+    }
+}
+
+trait PipelineExt {
+    fn pipe<F, R>(self, f: F) -> R
+    where
+        F: FnOnce(Self) -> R,
+        Self: Sized;
+}
+
+impl<T> PipelineExt for Option<T> {
+    #[inline]
+    fn pipe<F, R>(self, f: F) -> R
+    where
+        F: FnOnce(Self) -> R,
+        Self: Sized,
+    {
+        f(self)
+    }
+}
+
+impl<T, E> PipelineExt for std::result::Result<T, E> {
+    #[inline]
+    fn pipe<F, R>(self, f: F) -> R
+    where
+        F: FnOnce(Self) -> R,
+        Self: Sized,
+    {
+        f(self)
     }
 }

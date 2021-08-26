@@ -14,6 +14,7 @@ pub(super) struct MongoMessageAlias {
     pub(super) key: String,
     pub(super) message: String,
     pub(super) attachments: Vec<MongoMessageAliasAttachment>,
+    pub(crate) usage_count: i64,
     pub(crate) created_at: DateTime,
 }
 
@@ -23,6 +24,7 @@ impl From<MessageAlias> for MongoMessageAlias {
             key: origin.key,
             message: origin.message,
             created_at: origin.created_at.into(),
+            usage_count: origin.usage_count as _,
             attachments: origin.attachments.into_iter().map(|x| x.into()).collect(),
         }
     }
@@ -34,6 +36,7 @@ impl Into<MessageAlias> for MongoMessageAlias {
             key: self.key,
             message: self.message,
             created_at: self.created_at.into(),
+            usage_count: self.usage_count as _,
             attachments: self.attachments.into_iter().map(|x| x.into()).collect(),
         }
     }

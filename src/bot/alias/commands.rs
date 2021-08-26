@@ -22,10 +22,36 @@ g!alias [subcommand] [args...]
 >>> 引数において " は省略できません <<<
 
 = subcommands =
+    status                       :: 現在登録されているエイリアス数を出します
     help                         :: この文を出します
     make "[キー]" "[メッセージ]" :: エイリアスを作成します
     delete "[キー]"              :: エイリアスを削除します
+    ranking                     :: 表示回数が多い順にエイリアスを表示します
 ```"#.into()
+}
+
+pub(super) async fn status(db: &Synced<impl MessageAliasDatabase>) -> Result<String> {
+    let len = db.read().await.len().await?;
+    Ok(format!("```\n現在登録されているエイリアス数: {}\n```", len))
+}
+
+pub(super) async fn usage_ranking(db: &Synced<impl MessageAliasDatabase>) -> Result<String> {
+    const SHOW_COUNT: usize = 20;
+    let ranking = db.read().await.usage_count_top_n(SHOW_COUNT).await?;
+
+    let mut result = vec!["```".into()];
+    for (i, r) in ranking.into_iter().enumerate() {
+        result.push(format!(
+            "#{:02} 使用回数: {:3} \"{}\"",
+            i + 1,
+            r.usage_count,
+            r.key
+        ));
+    }
+
+    result.push("```".into());
+
+    Ok(result.join("\n"))
 }
 
 const KEY_LENGTH_LIMIT: usize = 100;
@@ -99,6 +125,7 @@ pub(super) async fn make(
         message: msg.into(),
         created_at: Utc::now(),
         attachments: downloadad_attachments,
+        usage_count: 0,
     };
 
     db.write()

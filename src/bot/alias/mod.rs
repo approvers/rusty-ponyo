@@ -20,8 +20,10 @@ const PREFIX: &str = "g!alias";
 pub(crate) trait MessageAliasDatabase: ThreadSafe {
     async fn save(&mut self, alias: MessageAlias) -> Result<()>;
     async fn get(&self, key: &str) -> Result<Option<MessageAlias>>;
+    async fn get_and_increment_usage_count(&mut self, key: &str) -> Result<Option<MessageAlias>>;
     async fn delete(&mut self, key: &str) -> Result<bool>;
     async fn len(&self) -> Result<u32>;
+    async fn usage_count_top_n(&self, n: usize) -> Result<Vec<MessageAlias>>;
 }
 
 pub(crate) struct MessageAliasBot<D: MessageAliasDatabase>(PhantomData<fn() -> D>);
@@ -48,7 +50,12 @@ impl<D: MessageAliasDatabase> BotService for MessageAliasBot<D> {
             }
         }
 
-        if let Some(registered_alias) = db.read().await.get(msg.content()).await? {
+        if let Some(registered_alias) = db
+            .write()
+            .await
+            .get_and_increment_usage_count(msg.content())
+            .await?
+        {
             ctx.send_message(SendMessage {
                 content: &registered_alias.message,
                 attachments: &registered_alias
@@ -109,6 +116,9 @@ impl<D: MessageAliasDatabase> MessageAliasBot<D> {
 
                 Ok(Some(help()))
             }
+
+            "status" => Ok(Some(status(db).await?)),
+            "ranking" => Ok(Some(usage_ranking(db).await?)),
 
             _ => Ok(Some(help())),
         }

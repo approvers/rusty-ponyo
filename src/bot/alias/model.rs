@@ -8,6 +8,7 @@ pub(crate) struct MessageAlias {
     pub(crate) key: String,
     pub(crate) message: String,
     pub(crate) attachments: Vec<MessageAliasAttachment>,
+    pub(crate) usage_count: u32,
     pub(crate) created_at: DateTime<Utc>,
 }
 
