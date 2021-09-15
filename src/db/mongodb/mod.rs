@@ -47,8 +47,8 @@ const MESSAGE_ALIAS_COLLECTION_NAME: &str = "MessageAlias";
 impl MessageAliasDatabase for MongoDb {
     async fn save(&mut self, alias: MessageAlias) -> Result<()> {
         self.inner
-            .collection_with_type::<MongoMessageAlias>(MESSAGE_ALIAS_COLLECTION_NAME)
-            .insert_one(alias.into(), None)
+            .collection::<MongoMessageAlias>(MESSAGE_ALIAS_COLLECTION_NAME)
+            .insert_one(MongoMessageAlias::from(alias), None)
             .await
             .context("failed to insert new alias")?;
 
@@ -57,7 +57,7 @@ impl MessageAliasDatabase for MongoDb {
 
     async fn get(&self, key: &str) -> Result<Option<MessageAlias>> {
         self.inner
-            .collection_with_type::<MongoMessageAlias>(MESSAGE_ALIAS_COLLECTION_NAME)
+            .collection::<MongoMessageAlias>(MESSAGE_ALIAS_COLLECTION_NAME)
             .find_one(doc! { "key": key }, None)
             .await
             .map(|x| x.map(|x| x.into()))
@@ -69,7 +69,7 @@ impl MessageAliasDatabase for MongoDb {
 
         if result.is_some() {
             self.inner
-                .collection(MESSAGE_ALIAS_COLLECTION_NAME)
+                .collection::<MongoMessageAlias>(MESSAGE_ALIAS_COLLECTION_NAME)
                 .update_one(
                     doc! { "key": key },
                     doc! { "$inc": { "usage_count": 1 } },
@@ -84,7 +84,7 @@ impl MessageAliasDatabase for MongoDb {
 
     async fn len(&self) -> Result<u32> {
         self.inner
-            .collection(MESSAGE_ALIAS_COLLECTION_NAME)
+            .collection::<MongoMessageAlias>(MESSAGE_ALIAS_COLLECTION_NAME)
             .aggregate(Some(doc! { "$count": "key" }), None)
             .await
             .context("failed to aggregate")?
@@ -101,7 +101,7 @@ impl MessageAliasDatabase for MongoDb {
 
     async fn delete(&mut self, key: &str) -> Result<bool> {
         self.inner
-            .collection(MESSAGE_ALIAS_COLLECTION_NAME)
+            .collection::<MongoMessageAlias>(MESSAGE_ALIAS_COLLECTION_NAME)
             .delete_one(doc! { "key": key }, None)
             .await
             .context("failed to delete alias")
@@ -110,7 +110,7 @@ impl MessageAliasDatabase for MongoDb {
 
     async fn usage_count_top_n(&self, n: usize) -> Result<Vec<MessageAlias>> {
         self.inner
-            .collection_with_type::<MongoMessageAlias>(MESSAGE_ALIAS_COLLECTION_NAME)
+            .collection::<MongoMessageAlias>(MESSAGE_ALIAS_COLLECTION_NAME)
             .aggregate(
                 vec![
                     doc! { "$sort": { "usage_count": -1 } },
@@ -146,7 +146,7 @@ impl MongoDb {
         user_id: u64,
     ) -> Result<Option<SessionWithDocId>> {
         self.inner
-            .collection(GENKAI_POINT_COLLECTION_NAME)
+            .collection::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
             .aggregate(
                 vec![
                     doc! { "$match": { "user_id": user_id.to_string() } },
@@ -197,7 +197,7 @@ impl GenkaiPointDatabase for MongoDb {
             if let Some(left_at) = session.left_at {
                 if (Utc::now() - left_at) < Duration::minutes(5) {
                     self.inner
-                        .collection_with_type::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
+                        .collection::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
                         .update_one(
                             doc! { "_id": doc_id },
                             doc! { "$unset": { "left_at": "" } },
@@ -219,7 +219,7 @@ impl GenkaiPointDatabase for MongoDb {
         .into();
 
         self.inner
-            .collection_with_type::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
+            .collection::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
             .insert_one(session, None)
             .await
             .context("failed to insert document")?;
@@ -230,7 +230,7 @@ impl GenkaiPointDatabase for MongoDb {
     async fn unclosed_session_exists(&self, user_id: u64) -> Result<bool> {
         let exists = self
             .inner
-            .collection(GENKAI_POINT_COLLECTION_NAME)
+            .collection::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
             .aggregate(
                 Some(doc! {
                     "$match": {
@@ -250,7 +250,9 @@ impl GenkaiPointDatabase for MongoDb {
     }
 
     async fn close_session(&mut self, user_id: u64, left_at: DateTime<Utc>) -> Result<()> {
-        let collection = self.inner.collection(GENKAI_POINT_COLLECTION_NAME);
+        let collection = self
+            .inner
+            .collection::<MongoSession>(GENKAI_POINT_COLLECTION_NAME);
 
         let result = collection
             .find_one_and_update(
@@ -273,7 +275,7 @@ impl GenkaiPointDatabase for MongoDb {
 
     async fn get_users_all_sessions(&self, user_id: u64) -> Result<Vec<Session>> {
         self.inner
-            .collection_with_type::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
+            .collection::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
             .find(doc! { "user_id": user_id.to_string() }, None)
             .await
             .context("failed to find")?
@@ -285,7 +287,7 @@ impl GenkaiPointDatabase for MongoDb {
 
     async fn get_all_users_who_has_unclosed_session(&self) -> Result<Vec<u64>> {
         self.inner
-            .collection(GENKAI_POINT_COLLECTION_NAME)
+            .collection::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
             .aggregate(
                 vec![
                     doc! {
@@ -320,7 +322,7 @@ impl GenkaiPointDatabase for MongoDb {
     async fn get_all_users_stats(&self) -> Result<Vec<UserStat>> {
         let mut stream = self
             .inner
-            .collection_with_type::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
+            .collection::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
             .find(None, None)
             .await
             .context("failed to find")?;

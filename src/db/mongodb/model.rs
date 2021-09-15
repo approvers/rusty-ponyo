@@ -82,8 +82,8 @@ impl From<Session> for MongoSession {
     fn from(s: Session) -> Self {
         Self {
             user_id: s.user_id.to_string(),
-            joined_at: DateTime(s.joined_at),
-            left_at: s.left_at.map(DateTime),
+            joined_at: DateTime::from(s.joined_at),
+            left_at: s.left_at.map(DateTime::from),
         }
     }
 }
@@ -92,8 +92,8 @@ impl Into<Session> for MongoSession {
     fn into(self) -> Session {
         Session {
             user_id: self.user_id.parse().expect("invalid session user_id"),
-            joined_at: self.joined_at.0,
-            left_at: self.left_at.map(|x| x.0),
+            joined_at: self.joined_at.into(),
+            left_at: self.left_at.map(|x| x.into()),
         }
     }
 }

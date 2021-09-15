@@ -83,11 +83,7 @@ impl MessageAliasDatabase for MemoryDB {
     async fn usage_count_top_n(&self, n: usize) -> Result<Vec<MessageAlias>> {
         let mut p = self.aliases.clone();
         p.sort_by_key(|x| x.usage_count);
-
-        {
-            // remove unneeded elements
-            p.drain(n..);
-        }
+        p.truncate(n);
 
         Ok(p)
     }
