@@ -1,6 +1,7 @@
 use {
     crate::bot::{
         alias::{model::MessageAlias, MessageAliasDatabase},
+        auth::GenkaiAuthDatabase,
         genkai_point::{
             model::{Session, UserStat, GENKAI_POINT_MAX},
             CreateNewSessionResult, GenkaiPointDatabase,
@@ -9,6 +10,7 @@ use {
     anyhow::{anyhow, Context as _, Result},
     async_trait::async_trait,
     chrono::{DateTime, Duration, Utc},
+    hashbrown::HashMap,
     serde::Serialize,
 };
 
@@ -16,6 +18,7 @@ use {
 pub(crate) struct MemoryDB {
     aliases: Vec<MessageAlias>,
     sessions: Vec<Session>,
+    auth_entries: HashMap<u64, AuthEntry>,
 }
 
 impl MemoryDB {
@@ -23,6 +26,7 @@ impl MemoryDB {
         Self {
             aliases: vec![],
             sessions: vec![],
+            auth_entries: HashMap::new(),
         }
     }
 
@@ -203,5 +207,46 @@ impl GenkaiPointDatabase for MemoryDB {
         }
 
         Ok(result)
+    }
+}
+
+#[derive(Serialize, Default)]
+struct AuthEntry {
+    pgp_pub_key: Option<String>,
+    token: Option<String>,
+}
+
+#[async_trait]
+impl GenkaiAuthDatabase for MemoryDB {
+    async fn register_pgp_key(&mut self, user_id: u64, key: &str) -> Result<()> {
+        self.auth_entries.entry(user_id).or_default().pgp_pub_key = Some(key.to_string());
+
+        Ok(())
+    }
+
+    async fn get_pgp_key(&self, user_id: u64) -> Result<Option<String>> {
+        Ok(self
+            .auth_entries
+            .get(&user_id)
+            .and_then(|x| x.pgp_pub_key.clone()))
+    }
+
+    async fn register_token(&mut self, user_id: u64, token: &str) -> Result<()> {
+        self.auth_entries.entry(user_id).or_default().token = Some(token.to_string());
+
+        Ok(())
+    }
+
+    async fn revoke_token(&mut self, user_id: u64) -> Result<()> {
+        self.auth_entries.entry(user_id).or_default().token = None;
+
+        Ok(())
+    }
+
+    async fn get_token(&self, user_id: u64) -> Result<Option<String>> {
+        Ok(self
+            .auth_entries
+            .get(&user_id)
+            .and_then(|x| x.token.clone()))
     }
 }

@@ -314,6 +314,7 @@ impl EventHandler for EvHandler {
             author: DiscordAuthor {
                 id: message.author.id.0,
                 name: message.author.name,
+                ctx: &ctx,
             },
         };
 
@@ -336,7 +337,7 @@ struct NicknameCache(HashMap<SerenityUserId, String>);
 struct DiscordMessage<'a> {
     content: String,
     attachments: Vec<&'a dyn Attachment>,
-    author: DiscordAuthor,
+    author: DiscordAuthor<'a>,
 }
 
 impl Message for DiscordMessage<'_> {
@@ -353,18 +354,41 @@ impl Message for DiscordMessage<'_> {
     }
 }
 
-struct DiscordAuthor {
+struct DiscordAuthor<'a> {
     id: u64,
     name: String,
+    ctx: &'a SerenityContext,
 }
 
-impl User for DiscordAuthor {
+#[async_trait]
+impl<'a> User for DiscordAuthor<'a> {
     fn id(&self) -> u64 {
         self.id
     }
 
     fn name(&self) -> &str {
         &self.name
+    }
+
+    async fn dm(&self, msg: SendMessage<'_>) -> Result<()> {
+        let files = msg
+            .attachments
+            .iter()
+            .map(|x| AttachmentType::Bytes {
+                data: x.data.into(),
+                filename: x.name.to_string(),
+            })
+            .collect::<Vec<_>>();
+
+        SerenityUserId(self.id)
+            .create_dm_channel(self.ctx)
+            .await
+            .context("failed to create DM channel")?
+            .send_files(self.ctx, files, |m| m.content(msg.content))
+            .await
+            .context("failed to send DM")?;
+
+        Ok(())
     }
 }
 

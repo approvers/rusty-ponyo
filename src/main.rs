@@ -3,7 +3,7 @@ mod client;
 mod db;
 
 use {
-    crate::bot::{alias::MessageAliasBot, genkai_point::GenkaiPointBot},
+    crate::bot::{alias::MessageAliasBot, auth::GenkaiAuthBot, genkai_point::GenkaiPointBot},
     anyhow::{Context as _, Result},
     cfg_if::cfg_if,
     std::sync::Arc,
@@ -78,7 +78,8 @@ async fn async_main() -> Result<()> {
 
     client
         .add_service(MessageAliasBot::new(), Arc::clone(&db))
-        .add_service(GenkaiPointBot::new(), Arc::clone(&db));
+        .add_service(GenkaiPointBot::new(), Arc::clone(&db))
+        .add_service(GenkaiAuthBot::new(), Arc::clone(&db));
 
     cfg_if! {
         if #[cfg(feature = "console_client")] {

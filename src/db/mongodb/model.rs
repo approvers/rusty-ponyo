@@ -97,3 +97,10 @@ impl Into<Session> for MongoSession {
         }
     }
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub(super) struct GenkaiAuthData {
+    pub(crate) user_id: String,
+    pub(crate) pgp_pub_key: Option<String>,
+    pub(crate) token: Option<String>,
+}

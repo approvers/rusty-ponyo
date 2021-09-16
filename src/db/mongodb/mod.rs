@@ -4,12 +4,13 @@ use {
     crate::{
         bot::{
             alias::{model::MessageAlias, MessageAliasDatabase},
+            auth::GenkaiAuthDatabase,
             genkai_point::{
                 model::{Session, UserStat},
                 CreateNewSessionResult, GenkaiPointDatabase,
             },
         },
-        db::mongodb::model::{MongoMessageAlias, MongoSession},
+        db::mongodb::model::{GenkaiAuthData, MongoMessageAlias, MongoSession},
     },
     anyhow::{bail, Context as _, Result},
     async_trait::async_trait,
@@ -17,7 +18,7 @@ use {
     hashbrown::HashMap,
     mongodb::{
         bson::{self, doc, oid::ObjectId},
-        options::ClientOptions,
+        options::{ClientOptions, FindOneAndUpdateOptions},
         Client, Database,
     },
     tokio_stream::StreamExt,
@@ -343,6 +344,87 @@ impl GenkaiPointDatabase for MongoDb {
             .flat_map(|(_, x)| UserStat::from_sessions(x).transpose())
             .collect::<Result<Vec<_>, _>>()
             .context("failed to calc userstat")
+    }
+}
+
+const GENKAI_AUTH_COLLECTION_NAME: &str = "GenkaiAuth";
+
+#[async_trait]
+impl GenkaiAuthDatabase for MongoDb {
+    async fn register_pgp_key(&mut self, user_id: u64, key: &str) -> Result<()> {
+        let user_id = user_id.to_string();
+
+        self.inner
+            .collection::<GenkaiAuthData>(GENKAI_AUTH_COLLECTION_NAME)
+            .find_one_and_update(
+                doc! { "user_id": &user_id },
+                doc! { "pgp_pub_key": key },
+                FindOneAndUpdateOptions::builder()
+                    .upsert(Some(true))
+                    .build(),
+            )
+            .await
+            .context("failed to upsert")?;
+
+        Ok(())
+    }
+
+    async fn get_pgp_key(&self, user_id: u64) -> Result<Option<String>> {
+        let user_id = user_id.to_string();
+
+        self.inner
+            .collection::<GenkaiAuthData>(GENKAI_AUTH_COLLECTION_NAME)
+            .find_one(doc! { "user_id": &user_id }, None)
+            .await
+            .context("failed to find pgp key")
+            .map(|x| x.map(|x| x.pgp_pub_key).flatten())
+    }
+
+    async fn register_token(&mut self, user_id: u64, token: &str) -> Result<()> {
+        let user_id = user_id.to_string();
+
+        self.inner
+            .collection::<GenkaiAuthData>(GENKAI_AUTH_COLLECTION_NAME)
+            .find_one_and_update(
+                doc! { "user_id": &user_id },
+                doc! { "token": token },
+                FindOneAndUpdateOptions::builder()
+                    .upsert(Some(true))
+                    .build(),
+            )
+            .await
+            .context("failed to upsert")?;
+
+        Ok(())
+    }
+
+    async fn revoke_token(&mut self, user_id: u64) -> Result<()> {
+        let user_id = user_id.to_string();
+
+        self.inner
+            .collection::<GenkaiAuthData>(GENKAI_AUTH_COLLECTION_NAME)
+            .find_one_and_update(
+                doc! { "user_id": &user_id },
+                doc! { "$unset": { "token": "" } },
+                FindOneAndUpdateOptions::builder()
+                    .upsert(Some(true))
+                    .build(),
+            )
+            .await
+            .context("failed to upsert")?;
+
+        Ok(())
+    }
+
+    async fn get_token(&self, user_id: u64) -> Result<Option<String>> {
+        let user_id = user_id.to_string();
+
+        self.inner
+            .collection::<GenkaiAuthData>(GENKAI_AUTH_COLLECTION_NAME)
+            .find_one(doc! { "user_id": &user_id }, None)
+            .await
+            .context("failed to find pgp key")
+            .map(|x| x.map(|x| x.token).flatten())
     }
 }
 
