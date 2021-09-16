@@ -5,7 +5,6 @@ mod db;
 use {
     crate::bot::{alias::MessageAliasBot, auth::GenkaiAuthBot, genkai_point::GenkaiPointBot},
     anyhow::{Context as _, Result},
-    cfg_if::cfg_if,
     std::sync::Arc,
     tokio::sync::RwLock,
 };
@@ -50,44 +49,34 @@ fn env_var(name: &str) -> Result<String> {
 }
 
 async fn async_main() -> Result<()> {
-    let db = {
-        cfg_if! {
-            if #[cfg(feature = "memory_db")] {
-                crate::db::mem::MemoryDB::new()
-            } else if #[cfg(feature = "mongo_db")] {
-                crate::db::mongodb::MongoDb::new(&env_var("MONGODB_URI")?).await?
-            } else {
-                compile_error!();
-            }
-        }
-    };
+    #[cfg(feature = "memory_db")]
+    let db = Arc::new(RwLock::new(crate::db::mem::MemoryDB::new()));
+    #[cfg(feature = "memory_db")]
+    let auth_db = Arc::clone(&db);
 
-    let db = Arc::new(RwLock::new(db));
+    #[cfg(feature = "mongo_db")]
+    let db = Arc::new(RwLock::new(
+        crate::db::mongodb::MongoDb::new(&env_var("MONGODB_URI")?).await?,
+    ));
+    #[cfg(feature = "mongo_db")]
+    let auth_db = Arc::new(RwLock::new(
+        crate::db::mongodb::MongoDb::new(&env_var("MONGO_AUTH_DB_URI")?).await?,
+    ));
 
-    let mut client = {
-        cfg_if! {
-            if #[cfg(feature = "console_client")] {
-                crate::client::console::ConsoleClient::new()
-            } else if #[cfg(feature = "discord_client")] {
-                crate::client::discord::DiscordClient::new()
-            } else {
-                compile_error!()
-            }
-        }
-    };
+    #[cfg(feature = "console_client")]
+    let mut client = crate::client::console::ConsoleClient::new();
+    #[cfg(feature = "discord_client")]
+    let mut client = crate::client::discord::DiscordClient::new();
 
     client
         .add_service(MessageAliasBot::new(), Arc::clone(&db))
         .add_service(GenkaiPointBot::new(), Arc::clone(&db))
-        .add_service(GenkaiAuthBot::new(), Arc::clone(&db));
+        .add_service(GenkaiAuthBot::new(), Arc::clone(&auth_db));
 
-    cfg_if! {
-        if #[cfg(feature = "console_client")] {
-            client.run().await
-        } else if #[cfg(feature = "discord_client")] {
-            client.run(&env_var("DISCORD_TOKEN")?).await
-        } else {
-            compile_error!()
-        }
-    }
+    #[cfg(feature = "console_client")]
+    client.run().await?;
+    #[cfg(feature = "discord_client")]
+    client.run(&env_var("DISCORD_TOKEN")?).await?;
+
+    Ok(())
 }
