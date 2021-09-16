@@ -2,6 +2,8 @@ use {
     crate::{Synced, ThreadSafe},
     anyhow::Result,
     async_trait::async_trait,
+    std::future::Future,
+    std::pin::Pin,
 };
 
 pub mod alias;
@@ -25,6 +27,16 @@ pub(crate) trait User: ThreadSafe {
     fn id(&self) -> u64;
     fn name(&self) -> &str;
     async fn dm(&self, msg: SendMessage<'_>) -> Result<()>;
+
+    fn dm_text<'a>(
+        &'a self,
+        text: &'a str,
+    ) -> Pin<Box<dyn Send + Future<Output = Result<()>> + 'a>> {
+        self.dm(SendMessage {
+            content: text,
+            attachments: &[],
+        })
+    }
 }
 
 pub(crate) struct SendMessage<'a> {
@@ -41,6 +53,16 @@ pub(crate) struct SendAttachment<'a> {
 pub(crate) trait Context: ThreadSafe {
     async fn send_message(&self, msg: SendMessage<'_>) -> Result<()>;
     async fn get_user_name(&self, user_id: u64) -> Result<String>;
+
+    fn send_text_message<'a>(
+        &'a self,
+        text: &'a str,
+    ) -> Pin<Box<dyn Send + Future<Output = Result<()>> + 'a>> {
+        self.send_message(SendMessage {
+            content: text,
+            attachments: &[],
+        })
+    }
 }
 
 #[async_trait]

@@ -1,5 +1,5 @@
 use {
-    crate::bot::{BotService, Context, Message, SendMessage, Synced, ThreadSafe},
+    crate::bot::{BotService, Context, Message, Synced, ThreadSafe},
     anyhow::{Context as _, Result},
     async_trait::async_trait,
     rand::{prelude::StdRng, Rng, SeedableRng},
@@ -10,7 +10,9 @@ use {
         serialize::stream::{Armorer, Encryptor, LiteralWriter, Message as OpenGPGMessage},
         Cert,
     },
+    sha2::Digest,
     std::{io::Write, marker::PhantomData, time::Duration},
+    url::{Host, Origin, Url},
 };
 
 #[async_trait]
@@ -18,12 +20,13 @@ pub(crate) trait GenkaiAuthDatabase: ThreadSafe {
     async fn register_pgp_key(&mut self, user_id: u64, cert: &str) -> Result<()>;
     async fn get_pgp_key(&self, user_id: u64) -> Result<Option<String>>;
 
-    async fn register_token(&mut self, user_id: u64, token: &str) -> Result<()>;
+    async fn register_token(&mut self, user_id: u64, hashed_token: &str) -> Result<()>;
     async fn revoke_token(&mut self, user_id: u64) -> Result<()>;
     async fn get_token(&self, user_id: u64) -> Result<Option<String>>;
 }
 
 pub(crate) struct GenkaiAuthBot<D> {
+    pgp_pubkey_source_domain_whitelist: Vec<String>,
     phantom: PhantomData<fn() -> D>,
 }
 
@@ -44,7 +47,7 @@ impl<D: GenkaiAuthDatabase> BotService for GenkaiAuthBot<D> {
         const PREFIX: &str = "g!auth";
 
         match tokens.as_slice() {
-            [PREFIX, "set", "pgp", url] => Self::set_pgp(db, msg, ctx, url).await?,
+            [PREFIX, "set", "pgp", url] => self.set_pgp(db, msg, ctx, url).await?,
             [PREFIX, "token"] => Self::token(db, msg, ctx).await?,
             [PREFIX, "revoke"] => Self::revoke(db, msg, ctx).await?,
             [PREFIX, ..] => Self::help(ctx).await?,
@@ -57,33 +60,36 @@ impl<D: GenkaiAuthDatabase> BotService for GenkaiAuthBot<D> {
 }
 
 impl<D: GenkaiAuthDatabase> GenkaiAuthBot<D> {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(pubkey_whitelist: Vec<String>) -> Self {
         Self {
+            pgp_pubkey_source_domain_whitelist: pubkey_whitelist,
             phantom: PhantomData,
         }
     }
 
     async fn help(ctx: &dyn Context) -> Result<()> {
-        ctx.send_message(SendMessage {
-            content: include_str!("help_text.txt"),
-            attachments: &[],
-        })
-        .await
+        ctx.send_text_message(include_str!("help_text.txt")).await
     }
 
     async fn set_pgp(
+        &self,
         db: &Synced<D>,
         msg: &dyn Message,
         ctx: &dyn Context,
         url: &str,
     ) -> Result<()> {
-        let cert = match download_gpg_key(url).await {
+        let verify_result = match self.verify_url(url) {
+            Ok(_) => download_gpg_key(url).await,
+            Err(e) => Err(e),
+        };
+
+        let cert = match verify_result {
             Ok(v) => v,
             Err(e) => {
-                ctx.send_message(SendMessage {
-                    content: &format!("公開鍵の処理に失敗しました。URLを確認して下さい。: {}", e),
-                    attachments: &[],
-                })
+                ctx.send_text_message(&format!(
+                    "公開鍵の処理に失敗しました。URLを確認して下さい。: {}",
+                    e
+                ))
                 .await?;
                 return Ok(());
             }
@@ -95,29 +101,17 @@ impl<D: GenkaiAuthDatabase> GenkaiAuthBot<D> {
             .await
             .context("failed to register gpg key")?;
 
-        ctx.send_message(SendMessage {
-            content: "登録しました",
-            attachments: &[],
-        })
-        .await?;
+        ctx.send_text_message("登録しました").await?;
 
         Ok(())
     }
 
     async fn token(db: &Synced<D>, msg: &dyn Message, ctx: &dyn Context) -> Result<()> {
         let author = msg.author();
-        let mut token = db.read().await.get_token(author.id()).await?;
 
-        if token.is_none() {
-            let generated_token = gen_token();
-
-            db.write()
-                .await
-                .register_token(msg.author().id(), &generated_token)
-                .await
-                .context("failed to register new token")?;
-
-            token = Some(generated_token);
+        if db.read().await.get_token(author.id()).await?.is_some() {
+            ctx.send_text_message("すでにトークンが登録されています。新しいトークンを作成したい場合は先に revoke してください。現在登録されているトークンの開示は出来ません。").await?;
+            return Ok(());
         }
 
         let gpg_key = db
@@ -128,21 +122,31 @@ impl<D: GenkaiAuthDatabase> GenkaiAuthBot<D> {
             .context("failed to fetch user's gpg key")?;
 
         if gpg_key.is_none() {
-            ctx.send_message(SendMessage {
-                content: "GPG鍵が登録されていません。トークンを送信するために必要です。登録方法はhelpを参照してください。",
-                attachments: &[]
-            }).await?;
+            ctx.send_text_message("GPG鍵が登録されていません。トークンを送信するために必要です。登録方法はhelpを参照してください。").await?;
             return Ok(());
         }
 
-        let token = encrypt(&gpg_key.unwrap(), &token.unwrap())?;
+        let generated_token = gen_token();
 
-        let msg = format!(include_str!("./token_text.txt"), TOKEN = token);
+        let mut hasher = sha2::Sha512::new();
+        hasher.update(generated_token.as_bytes());
+        let hashed = hasher.finalize();
+        let hashed = hex::encode(&hashed);
+
+        db.write()
+            .await
+            .register_token(msg.author().id(), &hashed)
+            .await
+            .context("failed to register new token")?;
+
+        let token = Some(generated_token);
+
+        let mut token = token.unwrap();
+        token.push('\n');
+        let token = encrypt(&gpg_key.unwrap(), &token)?;
+
         author
-            .dm(SendMessage {
-                content: &msg,
-                attachments: &[],
-            })
+            .dm_text(&format!(include_str!("token_text.txt"), TOKEN = token))
             .await?;
 
         Ok(())
@@ -155,11 +159,19 @@ impl<D: GenkaiAuthDatabase> GenkaiAuthBot<D> {
             .await
             .context("failed to revoke token")?;
 
-        ctx.send_message(SendMessage {
-            content: "トークンを無効化しました。",
-            attachments: &[],
-        })
-        .await?;
+        ctx.send_text_message("トークンを無効化しました。").await?;
+
+        Ok(())
+    }
+
+    fn verify_url(&self, url: &str) -> std::result::Result<(), &'static str> {
+        let url = Url::parse(url).map_err(|_| "failed to parse url")?;
+
+        if !matches!(url.origin(), Origin::Tuple(_, Host::Domain(d), _)
+                if self.pgp_pubkey_source_domain_whitelist.contains(&d))
+        {
+            return Err("provided url doesn't contain domain or its domain is not on whitelist.");
+        }
 
         Ok(())
     }
@@ -185,8 +197,6 @@ fn gen_token() -> String {
     for _ in 0..rng.gen_range(0..BLUR) {
         token.push(rune(&mut rng));
     }
-
-    token.push('\n');
 
     token
 }

@@ -1692,6 +1692,7 @@ dependencies = [
  "chrono-tz",
  "dotenv",
  "hashbrown",
+ "hex",
  "mongodb",
  "once_cell",
  "parking_lot",
@@ -1701,10 +1702,12 @@ dependencies = [
  "serde",
  "serde_json",
  "serenity",
+ "sha2",
  "tokio",
  "tokio-stream",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]

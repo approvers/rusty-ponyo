@@ -27,7 +27,8 @@ type Synced<T> = Arc<RwLock<T>>;
 trait ThreadSafe: Send + Sync {}
 impl<T> ThreadSafe for T where T: Send + Sync {}
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     dotenv::dotenv().ok();
 
     let use_ansi = env_var("NO_COLOR").is_err();
@@ -37,18 +38,6 @@ fn main() -> Result<()> {
         .with_ansi(use_ansi)
         .init();
 
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .context("failed to build tokio runtime")?
-        .block_on(async_main())
-}
-
-fn env_var(name: &str) -> Result<String> {
-    std::env::var(name).with_context(|| format!("failed to get {} environment variable", name))
-}
-
-async fn async_main() -> Result<()> {
     #[cfg(feature = "memory_db")]
     let db = Arc::new(RwLock::new(crate::db::mem::MemoryDB::new()));
     #[cfg(feature = "memory_db")]
@@ -68,10 +57,15 @@ async fn async_main() -> Result<()> {
     #[cfg(feature = "discord_client")]
     let mut client = crate::client::discord::DiscordClient::new();
 
+    let pgp_whitelist = env_var("PGP_SOURCE_DOMAIN_WHITELIST")?
+        .split(',')
+        .map(|x| x.to_string())
+        .collect();
+
     client
         .add_service(MessageAliasBot::new(), Arc::clone(&db))
         .add_service(GenkaiPointBot::new(), Arc::clone(&db))
-        .add_service(GenkaiAuthBot::new(), Arc::clone(&auth_db));
+        .add_service(GenkaiAuthBot::new(pgp_whitelist), Arc::clone(&auth_db));
 
     #[cfg(feature = "console_client")]
     client.run().await?;
@@ -79,4 +73,8 @@ async fn async_main() -> Result<()> {
     client.run(&env_var("DISCORD_TOKEN")?).await?;
 
     Ok(())
+}
+
+fn env_var(name: &str) -> Result<String> {
+    std::env::var(name).with_context(|| format!("failed to get {} environment variable", name))
 }
