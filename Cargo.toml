@@ -1,6 +1,6 @@
 [package]
 name = "rusty-ponyo"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["kawaemon <34652535+kawaemon@users.noreply.github.com>"]
 edition = "2018"
 
