@@ -51,7 +51,7 @@ impl ConsoleClient {
 
             const ATTACHMENT_CMD: &str = "!attachments";
 
-            let message = {
+            let (content, attachments) = {
                 if input.starts_with(ATTACHMENT_CMD) {
                     for a in input[ATTACHMENT_CMD.len()..].trim().split(" ") {
                         attachments.push(ConsoleAttachment { name: a.trim() });
@@ -69,22 +69,30 @@ impl ConsoleClient {
                         continue;
                     }
 
-                    ConsoleMessage {
+                    (
                         content,
-                        attachments: attachments.iter().map(|x| x as _).collect::<Vec<_>>(),
-                    }
+                        attachments.iter().map(|x| x as _).collect::<Vec<_>>(),
+                    )
                 } else {
-                    ConsoleMessage {
-                        content: input,
-                        attachments: vec![],
-                    }
+                    (input, vec![])
                 }
             };
 
             for service in &self.services {
+                let begin = Instant::now();
+
                 let ctx = ConsoleContext {
                     service_name: service.name(),
-                    begin: Instant::now(),
+                    begin,
+                };
+
+                let message = ConsoleMessage {
+                    content: content.clone(),
+                    attachments: attachments.clone(),
+                    user: ConsoleUser {
+                        service_name: service.name(),
+                        begin,
+                    },
                 };
 
                 let result = service.on_message(&message, &ctx).await;
@@ -103,6 +111,7 @@ impl ConsoleClient {
 struct ConsoleMessage<'a> {
     content: String,
     attachments: Vec<&'a dyn Attachment>,
+    user: ConsoleUser<'a>,
 }
 
 impl Message for ConsoleMessage<'_> {
@@ -115,19 +124,34 @@ impl Message for ConsoleMessage<'_> {
     }
 
     fn author(&self) -> &dyn crate::bot::User {
-        &ConsoleUser
+        &self.user
     }
 }
 
-struct ConsoleUser;
+struct ConsoleUser<'a> {
+    service_name: &'a str,
+    begin: Instant,
+}
 
-impl User for ConsoleUser {
+#[async_trait]
+impl<'a> User for ConsoleUser<'a> {
     fn id(&self) -> u64 {
         0
     }
 
     fn name(&self) -> &str {
         "ConsoleUser"
+    }
+
+    async fn dm(&self, msg: SendMessage<'_>) -> Result<()> {
+        println!(
+            "({}, DM, {}ms): {}",
+            self.service_name,
+            self.begin.elapsed().as_millis(),
+            msg.content
+        );
+
+        Ok(())
     }
 }
 
@@ -138,7 +162,7 @@ struct ConsoleAttachment<'a> {
 #[async_trait]
 impl Attachment for ConsoleAttachment<'_> {
     fn name(&self) -> &str {
-        &self.name
+        self.name
     }
 
     async fn download(&self) -> Result<Vec<u8>> {

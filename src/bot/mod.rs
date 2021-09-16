@@ -5,6 +5,7 @@ use {
 };
 
 pub mod alias;
+pub mod auth;
 pub mod genkai_point;
 
 pub(crate) trait Message: ThreadSafe {
@@ -19,9 +20,11 @@ pub(crate) trait Attachment: ThreadSafe {
     async fn download(&self) -> Result<Vec<u8>>;
 }
 
+#[async_trait]
 pub(crate) trait User: ThreadSafe {
     fn id(&self) -> u64;
     fn name(&self) -> &str;
+    async fn dm(&self, msg: SendMessage<'_>) -> Result<()>;
 }
 
 pub(crate) struct SendMessage<'a> {
