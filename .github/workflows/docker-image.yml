@@ -18,6 +18,8 @@ jobs:
             - uses: actions/checkout@v2
 
             - name: Build image
+              env:
+                  DOCKER_BUILDKIT: 1
               run: docker build . --tag $IMAGE_NAME
 
             - name: Log into registry
