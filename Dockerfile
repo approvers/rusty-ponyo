@@ -1,16 +1,22 @@
-FROM rust:1.50-alpine3.13 as base
+FROM rust:1.55 as base
 
-RUN apk add --no-cache musl-dev
-
-RUN mkdir /src
-COPY . /src/
+RUN apt-get update && \
+    apt install -y clang llvm pkg-config nettle-dev && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
-RUN cargo build --release --no-default-features --features "prod"
+COPY . /src/
+
+ENV NETTLE_STATIC=yes
+
+RUN --mount=type=cache,target=/root/.cargo/ \
+    --mount=type=cache,target=/src/target \
+    cargo build --release --no-default-features --features "prod" && \
+    cp /src/target/release/rusty-ponyo /
 
 
-FROM alpine:3.13
+FROM gcr.io/distroless/cc
 
-COPY --from=base /src/target/release/rusty-ponyo /usr/local/bin
+COPY --from=base /rusty-ponyo /
 
-CMD ["/usr/local/bin/rusty-ponyo"]
+CMD ["/rusty-ponyo"]
