@@ -68,7 +68,8 @@ impl<D: GenkaiAuthDatabase> GenkaiAuthBot<D> {
     }
 
     async fn help(ctx: &dyn Context) -> Result<()> {
-        ctx.send_text_message(include_str!("help_text.txt")).await
+        ctx.send_text_message(include_str!("messages/help_text.txt"))
+            .await
     }
 
     async fn set_pgp(
@@ -146,7 +147,10 @@ impl<D: GenkaiAuthDatabase> GenkaiAuthBot<D> {
         let token = encrypt(&gpg_key.unwrap(), &token)?;
 
         author
-            .dm_text(&format!(include_str!("token_text.txt"), TOKEN = token))
+            .dm_text(&format!(
+                include_str!("messages/token_text.txt"),
+                TOKEN = token
+            ))
             .await?;
 
         Ok(())

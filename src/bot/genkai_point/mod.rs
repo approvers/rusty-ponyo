@@ -185,7 +185,7 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
                 Some(self.show(db, ctx, msg.author().id()).await?)
             }
 
-            [PREFIX, ..] => Some(include_str!("help_text.txt").into()),
+            [PREFIX, ..] => Some(include_str!("messages/help_text.txt").into()),
             _ => None,
         };
 
