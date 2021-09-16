@@ -358,7 +358,7 @@ impl GenkaiAuthDatabase for MongoDb {
             .collection::<GenkaiAuthData>(GENKAI_AUTH_COLLECTION_NAME)
             .find_one_and_update(
                 doc! { "user_id": &user_id },
-                doc! { "pgp_pub_key": key },
+                doc! { "$set": { "pgp_pub_key": key } },
                 FindOneAndUpdateOptions::builder()
                     .upsert(Some(true))
                     .build(),
@@ -387,7 +387,7 @@ impl GenkaiAuthDatabase for MongoDb {
             .collection::<GenkaiAuthData>(GENKAI_AUTH_COLLECTION_NAME)
             .find_one_and_update(
                 doc! { "user_id": &user_id },
-                doc! { "token": token },
+                doc! { "$set": { "token": token } },
                 FindOneAndUpdateOptions::builder()
                     .upsert(Some(true))
                     .build(),
