@@ -34,7 +34,6 @@ async fn main() -> Result<()> {
     let use_ansi = env_var("NO_COLOR").is_err();
 
     tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .with_ansi(use_ansi)
         .init();
 
