@@ -36,6 +36,8 @@ impl UserStat {
             }
 
             result.genkai_point += session.calc_point();
+
+            // chrono::Duration has no AddAssign implementation.
             result.total_vc_duration = result.total_vc_duration + session.duration();
         }
 

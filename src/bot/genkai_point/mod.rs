@@ -253,24 +253,32 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
             .await
             .context("failed to get all closed sessions")?;
 
-        sessions.sort_by_key(|x| x.left_at);
+        sessions.sort_unstable_by_key(|x| x.left_at);
 
-        let this_time_point = sessions.last().unwrap().calc_point();
+        let last_session = sessions.last().unwrap();
+        let this_time_point = last_session.calc_point();
 
         if this_time_point > 0 {
-            let sum = sessions.iter().map(|x| x.calc_point()).sum::<u64>();
+            let stat = UserStat::from_sessions(&sessions)
+                .expect("`sessions` contains multiple user's session")
+                .expect("sessions have 1 elements at least");
+
+            let to_hours = |d: Duration| d.num_minutes() as f64 / 60.0;
 
             let msg = format!(
-                "now <@!{}> has {} genkai point (+{})",
-                user_id, sum, this_time_point
+                "<@!{uid}>: 限界ポイント: {pt} (+{pt_delta}), 総VC時間: {vc_hour} (+{vc_hour_delta})",
+                uid = user_id,
+
+                pt = stat.genkai_point,
+                pt_delta = this_time_point,
+
+                vc_hour = to_hours(stat.total_vc_duration),
+                vc_hour_delta = to_hours(last_session.duration()),
             );
 
-            ctx.send_message(SendMessage {
-                content: &msg,
-                attachments: &[],
-            })
-            .await
-            .context("failed to send message")?;
+            ctx.send_text_message(&msg)
+                .await
+                .context("failed to send message")?;
         }
 
         Ok(())
