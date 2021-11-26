@@ -107,7 +107,7 @@ impl EvHandler {
                 SerenityChannelId(APPROVERS_DEFAULT_CHANNEL_ID)
                     .say(
                         &ctx,
-                        "unexpected error reported. see log <@!391857452360007680>",
+                        &format!("Unexpected error reported from \"{}\". Read log <@!391857452360007680>", service.name()),
                     )
                     .await
                     .ok();
