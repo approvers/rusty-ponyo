@@ -1,9 +1,13 @@
 pub(crate) mod model;
+mod parse;
 
 use {
     crate::{
         bot::{
-            genkai_point::model::{Session, UserStat},
+            genkai_point::{
+                model::{Session, UserStat},
+                parse::{Command, RankBy},
+            },
             BotService, Context, Message, SendMessage,
         },
         Synced, ThreadSafe,
@@ -12,7 +16,7 @@ use {
     async_trait::async_trait,
     chrono::{DateTime, Duration, Utc},
     once_cell::sync::Lazy,
-    std::{cmp::Ordering, marker::PhantomData},
+    std::{cmp::Ordering, fmt::Write, marker::PhantomData},
     tokio::sync::Mutex,
 };
 
@@ -60,7 +64,7 @@ impl<D: GenkaiPointDatabase> GenkaiPointBot<D> {
         &self,
         db: &Synced<D>,
         ctx: &dyn Context,
-        sort_msg: &str,
+        by: &str,
         comparator: C,
     ) -> Result<String>
     where
@@ -76,7 +80,11 @@ impl<D: GenkaiPointDatabase> GenkaiPointBot<D> {
         ranking.sort_unstable_by_key(|x| x.user_id);
         ranking.sort_by(comparator);
 
-        let mut result = vec!["```".to_string(), sort_msg.to_string()];
+        let d = drop;
+
+        let mut result = String::with_capacity(256);
+        d(writeln!(result, "```"));
+        d(writeln!(result, "sorted by {}", by));
 
         let iter = ranking.iter().rev().take(20).enumerate();
 
@@ -86,7 +94,8 @@ impl<D: GenkaiPointDatabase> GenkaiPointBot<D> {
                 .await
                 .context("failed to get username")?;
 
-            result.push(format!(
+            d(writeln!(
+                result,
                 "#{:02} {:5}pt. {:>7.2}h {:>5.2}%限界 {}",
                 index + 1,
                 stat.genkai_point,
@@ -96,9 +105,9 @@ impl<D: GenkaiPointDatabase> GenkaiPointBot<D> {
             ))
         }
 
-        result.push("```".to_string());
+        d(writeln!(result, "```"));
 
-        Ok(result.join("\n"))
+        Ok(result)
     }
 
     async fn show(&self, db: &Synced<D>, ctx: &dyn Context, user_id: u64) -> Result<String> {
@@ -135,6 +144,23 @@ impl<D: GenkaiPointDatabase> GenkaiPointBot<D> {
     }
 }
 
+fn comparator<C>(
+    mapper: impl Fn(&UserStat) -> C,
+    invert: bool,
+) -> impl Fn(&UserStat, &UserStat) -> Ordering
+where
+    C: std::cmp::PartialOrd,
+{
+    move |a, b| {
+        let res = mapper(a).partial_cmp(&mapper(b)).unwrap();
+        if invert {
+            res.reverse()
+        } else {
+            res
+        }
+    }
+}
+
 #[async_trait]
 impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
     const NAME: &'static str = "GenkaiPointBot";
@@ -146,57 +172,49 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
         msg: &dyn Message,
         ctx: &dyn Context,
     ) -> Result<()> {
-        let tokens = msg.content().split_ascii_whitespace().collect::<Vec<_>>();
+        let msg = match parse::parse(msg.content()) {
+            None => return Ok(()),
 
-        const PREFIX: &str = "g!point";
-
-        let msg = match tokens.as_slice() {
-            [] => None,
-
-            [PREFIX, "ranking"] | [PREFIX, "ranking", "point"] => Some(
-                self.ranking(db, ctx, "sorted by genkai point", |a, b| {
-                    a.genkai_point.partial_cmp(&b.genkai_point).unwrap()
-                })
-                .await?,
-            ),
-
-            [PREFIX, "ranking", "duration"] => Some(
-                self.ranking(db, ctx, "sorted by vc duration", |a, b| {
-                    a.total_vc_duration
-                        .partial_cmp(&b.total_vc_duration)
-                        .unwrap()
-                })
-                .await?,
-            ),
-
-            [PREFIX, "ranking", "efficiency"] => Some(
-                self.ranking(db, ctx, "sorted by genkai efficiency", |a, b| {
-                    a.efficiency.partial_cmp(&b.efficiency).unwrap()
-                })
-                .await?,
-            ),
-
-            [PREFIX, "show", user_id] => match user_id.parse() {
-                Ok(i) => Some(self.show(db, ctx, i).await?),
-                Err(_) => Some("ユーザーIDのパースに失敗しました".into()),
-            },
-
-            [PREFIX, "show"] | ["限界ポイント"] => {
-                Some(self.show(db, ctx, msg.author().id()).await?)
+            Some(Ok(Command::Show { user_id })) => {
+                self.show(db, ctx, user_id.unwrap_or_else(|| msg.author().id()))
+                    .await?
             }
 
-            [PREFIX, ..] => Some(include_str!("messages/help_text.txt").into()),
-            _ => None,
+            // discarding all diagnostic informations :/
+            // TODO: more precious UI
+            Some(Ok(Command::Unspecified | Command::Unknown | Command::Help) | Err(_)) => {
+                include_str!("messages/help_text.txt").to_string()
+            }
+
+            #[rustfmt::skip]
+            Some(Ok(Command::Ranking {
+                by,
+                invert_specified: inv,
+            })) => match by.unwrap_or(RankBy::Point) {
+                RankBy::Point => {
+                    self.ranking(db, ctx,
+                        "genkai point",
+                        comparator(|x| x.genkai_point, inv)
+                    ).await
+                }
+                RankBy::Duration => {
+                    self.ranking(db, ctx,
+                        "total vc duration",
+                        comparator(|x| x.total_vc_duration, inv),
+                    ).await
+                }
+                RankBy::Efficiency => {
+                    self.ranking(db, ctx,
+                        "genkai efficiency",
+                        comparator(|x| x.efficiency, inv),
+                    ).await
+                }
+            }?,
         };
 
-        if let Some(msg) = msg {
-            ctx.send_message(SendMessage {
-                content: &msg,
-                attachments: &[],
-            })
+        ctx.send_text_message(&msg)
             .await
             .context("failed to send message")?;
-        }
 
         Ok(())
     }
@@ -213,8 +231,6 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
             .create_new_session(user_id, Utc::now())
             .await
             .context("failed to create new session")?;
-
-        tracing::debug!("create_new_session(user_id: {}) -> op: {:?}", user_id, op);
 
         if let CreateNewSessionResult::SessionResumed = op {
             let mut timeout = self.resume_msg_timeout.lock().await;
