@@ -282,7 +282,7 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
             let to_hours = |d: Duration| d.num_minutes() as f64 / 60.0;
 
             let msg = format!(
-                "<@!{uid}>: 限界ポイント: {pt} (+{pt_delta}), 総VC時間: {vc_hour} (+{vc_hour_delta})",
+                "<@!{uid}>\n限界ポイント: {pt}pt (+{pt_delta}pt)\n総VC時間: {vc_hour:.2}h (+{vc_hour_delta:.2}h)",
                 uid = user_id,
 
                 pt = stat.genkai_point,
