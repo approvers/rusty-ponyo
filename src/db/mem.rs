@@ -10,8 +10,8 @@ use {
     anyhow::{anyhow, Context as _, Result},
     async_trait::async_trait,
     chrono::{DateTime, Duration, Utc},
-    hashbrown::HashMap,
     serde::Serialize,
+    std::collections::HashMap,
 };
 
 #[derive(Serialize)]

@@ -6,7 +6,6 @@ use {
     },
     anyhow::{Context as _, Result},
     async_trait::async_trait,
-    hashbrown::{HashMap, HashSet},
     serenity::{
         http::AttachmentType,
         model::{
@@ -20,6 +19,7 @@ use {
         },
         prelude::{Client, Context as SerenityContext, EventHandler},
     },
+    std::collections::{HashMap, HashSet},
     std::{future::Future, sync::Arc, time::Duration},
     tokio::{
         sync::{Mutex, RwLock},
