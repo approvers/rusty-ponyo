@@ -194,7 +194,7 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
                 RankBy::Point => {
                     self.ranking(db, ctx,
                         "genkai point",
-                        comparator(|x| x.genkai_point, inv)
+                        comparator(|x| x.genkai_point, inv),
                     ).await
                 }
                 RankBy::Duration => {

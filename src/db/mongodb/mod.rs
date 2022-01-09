@@ -15,12 +15,12 @@ use {
     anyhow::{bail, Context as _, Result},
     async_trait::async_trait,
     chrono::{DateTime, Duration, Utc},
-    hashbrown::HashMap,
     mongodb::{
         bson::{self, doc, oid::ObjectId},
         options::{ClientOptions, FindOneAndUpdateOptions},
         Client, Database,
     },
+    std::collections::HashMap,
     tokio_stream::StreamExt,
 };
 
