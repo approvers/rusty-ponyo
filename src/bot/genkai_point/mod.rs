@@ -1,5 +1,6 @@
 pub(crate) mod model;
 mod parse;
+mod plot;
 
 use {
     crate::{
@@ -8,7 +9,7 @@ use {
                 model::{Session, UserStat},
                 parse::{Command, RankBy},
             },
-            BotService, Context, Message, SendMessage,
+            BotService, Context, Message, SendAttachment, SendMessage,
         },
         Synced, ThreadSafe,
     },
@@ -16,7 +17,7 @@ use {
     async_trait::async_trait,
     chrono::{DateTime, Duration, Utc},
     once_cell::sync::Lazy,
-    std::{cmp::Ordering, fmt::Write, marker::PhantomData},
+    std::{cmp::Ordering, collections::HashMap, fmt::Write, marker::PhantomData},
     tokio::sync::Mutex,
 };
 
@@ -34,7 +35,27 @@ pub(crate) trait GenkaiPointDatabase: ThreadSafe {
     async fn close_session(&mut self, user_id: u64, left_at: DateTime<Utc>) -> Result<()>;
     async fn get_users_all_sessions(&self, user_id: u64) -> Result<Vec<Session>>;
     async fn get_all_users_who_has_unclosed_session(&self) -> Result<Vec<u64>>;
-    async fn get_all_users_stats(&self) -> Result<Vec<UserStat>>;
+    async fn get_all_sessions(&self) -> Result<Vec<Session>>;
+
+    async fn get_all_users_stats(&self) -> Result<Vec<UserStat>> {
+        let sessions = self.get_all_sessions().await?;
+
+        let user_sessions = {
+            let mut map = HashMap::new();
+            for session in sessions {
+                map.entry(session.user_id)
+                    .or_insert_with(Vec::new)
+                    .push(session);
+            }
+            map
+        };
+
+        user_sessions
+            .into_iter()
+            .flat_map(|(_, x)| UserStat::from_sessions(&x).transpose())
+            .collect::<Result<_>>()
+            .context("failed to calc userstat")
+    }
 }
 
 #[derive(Debug)]
@@ -66,7 +87,7 @@ impl<D: GenkaiPointDatabase> GenkaiPointBot<D> {
         ctx: &dyn Context,
         by: &str,
         comparator: C,
-    ) -> Result<String>
+    ) -> Result<()>
     where
         C: Fn(&UserStat, &UserStat) -> Ordering,
     {
@@ -107,13 +128,65 @@ impl<D: GenkaiPointDatabase> GenkaiPointBot<D> {
 
         d(writeln!(result, "```"));
 
-        Ok(result)
+        ctx.send_text_message(&result)
+            .await
+            .context("failed to send message")?;
+        Ok(())
     }
 
-    async fn show(&self, db: &Synced<D>, ctx: &dyn Context, user_id: u64) -> Result<String> {
+    async fn graph(
+        &self,
+        db: &Synced<impl GenkaiPointDatabase>,
+        ctx: &dyn Context,
+        n: Option<u8>,
+    ) -> Result<()> {
+        let n = n.unwrap_or(5).clamp(1, 11);
+
+        #[cfg(feature = "plot_plotters")]
+        let plotter = plot::plotters::Plotters;
+
+        #[cfg(feature = "plot_matplotlib")]
+        let plotter = plot::plotters::Matplotlib;
+
+        #[cfg(all(feature = "plot_plotters", feature = "plot_matplotlib"))]
+        compile_error!(
+            "You can't enable both of plot_plotters and plot_matplotlib feature at the same time."
+        );
+
+        #[cfg(not(any(feature = "plot_plotters", feature = "plot_matplotlib")))]
+        compile_error!("You must enable discord_client or console_client feature.");
+
+        let image = plot::plot(db, ctx, plotter, n as _).await?;
+
+        match image {
+            Some(image) => {
+                ctx.send_message(SendMessage {
+                    content: "",
+                    attachments: &[SendAttachment {
+                        name: "graph.png",
+                        data: &image,
+                    }],
+                })
+                .await
+            }
+
+            None => {
+                ctx.send_text_message("プロットに必要なだけのデータがありません。")
+                    .await
+            }
+        }
+        .context("failed to send message")
+    }
+
+    async fn show(&self, db: &Synced<D>, ctx: &dyn Context, user_id: u64) -> Result<()> {
         let username = match ctx.get_user_name(user_id).await {
             Ok(n) => n,
-            Err(_) => return Ok("ユーザーが見つかりませんでした".into()),
+            Err(_) => {
+                ctx.send_text_message("ユーザーが見つかりませんでした")
+                    .await
+                    .context("failed to send message")?;
+                return Ok(());
+            }
         };
 
         let sessions = db
@@ -125,7 +198,7 @@ impl<D: GenkaiPointDatabase> GenkaiPointBot<D> {
 
         let stat = UserStat::from_sessions(&sessions).context("failed to get userstat")?;
 
-        Ok(match stat {
+        let msg = match stat {
             Some(stat) => {
                 format!(
                     "```\n{name}\n  - 限界ポイント: {points}\n  - 合計VC時間: {vc_hour:.2}h\n  - 限界効率: {efficiency:.2}%\n```",
@@ -140,7 +213,13 @@ impl<D: GenkaiPointDatabase> GenkaiPointBot<D> {
                 "{}さんの限界ポイントに関する情報は見つかりませんでした",
                 username
             ),
-        })
+        };
+
+        ctx.send_text_message(&msg)
+            .await
+            .context("failed to send message")?;
+
+        Ok(())
     }
 }
 
@@ -172,49 +251,53 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
         msg: &dyn Message,
         ctx: &dyn Context,
     ) -> Result<()> {
-        let msg = match parse::parse(msg.content()) {
+        match parse::parse(msg.content()) {
             None => return Ok(()),
-
-            Some(Ok(Command::Show { user_id })) => {
-                self.show(db, ctx, user_id.unwrap_or_else(|| msg.author().id()))
-                    .await?
-            }
 
             // discarding all diagnostic informations :/
             // TODO: more precious UI
             Some(Ok(Command::Unspecified | Command::Unknown | Command::Help) | Err(_)) => {
-                include_str!("messages/help_text.txt").to_string()
+                ctx.send_text_message(include_str!("messages/help_text.txt"))
+                    .await
+                    .context("failed to send message")?;
+            }
+
+            Some(Ok(Command::Show { user_id })) => {
+                self.show(db, ctx, user_id.unwrap_or_else(|| msg.author().id()))
+                    .await?;
+            }
+
+            Some(Ok(Command::Graph { n })) => {
+                self.graph(db, ctx, n).await?;
             }
 
             #[rustfmt::skip]
             Some(Ok(Command::Ranking {
                 by,
                 invert_specified: inv,
-            })) => match by.unwrap_or(RankBy::Point) {
-                RankBy::Point => {
-                    self.ranking(db, ctx,
-                        "genkai point",
-                        comparator(|x| x.genkai_point, inv),
-                    ).await
-                }
-                RankBy::Duration => {
-                    self.ranking(db, ctx,
-                        "total vc duration",
-                        comparator(|x| x.total_vc_duration, inv),
-                    ).await
-                }
-                RankBy::Efficiency => {
-                    self.ranking(db, ctx,
-                        "genkai efficiency",
-                        comparator(|x| x.efficiency, inv),
-                    ).await
-                }
-            }?,
-        };
-
-        ctx.send_text_message(&msg)
-            .await
-            .context("failed to send message")?;
+            })) => {
+                match by.unwrap_or(RankBy::Point) {
+                    RankBy::Point => {
+                        self.ranking(db, ctx,
+                            "genkai point",
+                            comparator(|x| x.genkai_point, inv),
+                        ).await
+                    }
+                    RankBy::Duration => {
+                        self.ranking(db, ctx,
+                            "total vc duration",
+                            comparator(|x| x.total_vc_duration, inv),
+                        ).await
+                    }
+                    RankBy::Efficiency => {
+                        self.ranking(db, ctx,
+                            "genkai efficiency",
+                            comparator(|x| x.efficiency, inv),
+                        ).await
+                    }
+                }?;
+            }
+        }
 
         Ok(())
     }

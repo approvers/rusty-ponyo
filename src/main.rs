@@ -17,7 +17,7 @@ compile_error!("You can't enable both of discord_client and console_client featu
 compile_error!("You can't enable both of mongo_db and memory_db feature at the same time.");
 
 #[cfg(not(any(feature = "discord_client", feature = "console_client")))]
-compile_error!("You must enable one of discord_client or console_client feature.");
+compile_error!("You must enable discord_client or console_client feature.");
 
 #[cfg(not(any(feature = "mongo_db", feature = "memory_db")))]
 compile_error!("You must enable mongo_db or memory_db feature.");
@@ -33,9 +33,7 @@ async fn main() -> Result<()> {
 
     let use_ansi = env_var("NO_COLOR").is_err();
 
-    tracing_subscriber::fmt()
-        .with_ansi(use_ansi)
-        .init();
+    tracing_subscriber::fmt().with_ansi(use_ansi).init();
 
     #[cfg(feature = "memory_db")]
     let db = Arc::new(RwLock::new(crate::db::mem::MemoryDB::new()));

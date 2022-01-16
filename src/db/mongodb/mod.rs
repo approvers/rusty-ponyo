@@ -5,10 +5,7 @@ use {
         bot::{
             alias::{model::MessageAlias, MessageAliasDatabase},
             auth::GenkaiAuthDatabase,
-            genkai_point::{
-                model::{Session, UserStat},
-                CreateNewSessionResult, GenkaiPointDatabase,
-            },
+            genkai_point::{model::Session, CreateNewSessionResult, GenkaiPointDatabase},
         },
         db::mongodb::model::{GenkaiAuthData, MongoMessageAlias, MongoSession},
     },
@@ -20,7 +17,6 @@ use {
         options::{ClientOptions, FindOneAndUpdateOptions},
         Client, Database,
     },
-    std::collections::HashMap,
     tokio_stream::StreamExt,
 };
 
@@ -320,30 +316,16 @@ impl GenkaiPointDatabase for MongoDb {
             .context("failed to retrieve document")
     }
 
-    async fn get_all_users_stats(&self) -> Result<Vec<UserStat>> {
-        let mut stream = self
-            .inner
+    async fn get_all_sessions(&self) -> Result<Vec<Session>> {
+        self.inner
             .collection::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
             .find(None, None)
             .await
-            .context("failed to find")?;
-
-        let mut user_sessions = HashMap::new();
-
-        while let Some(session) = stream.next().await {
-            let session: Session = session.context("failed to deserialize document")?.into();
-
-            user_sessions
-                .entry(session.user_id)
-                .or_insert_with(Vec::new)
-                .push(session);
-        }
-
-        user_sessions
-            .iter()
-            .flat_map(|(_, x)| UserStat::from_sessions(x).transpose())
-            .collect::<Result<Vec<_>, _>>()
-            .context("failed to calc userstat")
+            .context("failed to find")?
+            .map(|x| x.map(Into::into))
+            .collect::<Result<_, _>>()
+            .await
+            .context("failed to deserialize document")
     }
 }
 

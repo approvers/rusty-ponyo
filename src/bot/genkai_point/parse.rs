@@ -1,11 +1,15 @@
+// FIXME: it is better to use a parser library to implement this hell.
+
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum ParseError<'a> {
-    /// failed to parse userid of argument of Show command
+    /// failed to parse userid of argument of show command
     ShowUserId,
-    /// unknown subcommand of Ranking
+    /// unknown subcommand of ranking command
     RankingUnknownSubCommand,
-    /// unknown option of Ranking
-    RankingUnknownOption { unknowns: Vec<&'a str> },
+    /// unknown option
+    UnknownOption { unknowns: Vec<&'a str> },
+    /// missing or invalid token after option
+    MissingOrInvalidTokenAfterOption,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -23,6 +27,9 @@ pub(super) enum Command {
     },
     Show {
         user_id: Option<u64>,
+    },
+    Graph {
+        n: Option<u8>,
     },
     Help,
 
@@ -54,8 +61,28 @@ pub(super) fn parse(msg: &str) -> Option<Result<Command, ParseError<'_>>> {
         None => Ok(Unspecified),
         Some("show") => parse_show(tokens),
         Some("ranking") => parse_ranking(tokens),
+        Some("graph") => parse_graph(tokens),
         Some(_) => Ok(Unknown),
     })
+}
+
+// g!point graph
+// Options:
+//   -n <number>
+fn parse_graph<'i>(mut tokens: impl Iterator<Item = &'i str>) -> Result<Command, ParseError<'i>> {
+    let possibly_n = tokens.next();
+
+    match possibly_n {
+        Some("-n") => {}
+        Some(s) => return Err(ParseError::UnknownOption { unknowns: vec![s] }),
+        None => return Ok(Command::Graph { n: None }),
+    }
+
+    let possibly_n = tokens.next();
+    match possibly_n.map(|x| x.parse()) {
+        Some(Ok(n)) => Ok(Command::Graph { n: Some(n) }),
+        Some(Err(_)) | None => Err(ParseError::MissingOrInvalidTokenAfterOption),
+    }
 }
 
 // g!point show (user_id)?
@@ -94,7 +121,7 @@ fn parse_ranking<'i>(tokens: impl Iterator<Item = &'i str>) -> Result<Command, P
     }
 
     if !unknowns.is_empty() {
-        return Err(ParseError::RankingUnknownOption { unknowns });
+        return Err(ParseError::UnknownOption { unknowns });
     }
 
     Ok(Command::Ranking {
@@ -143,7 +170,7 @@ fn parse_test() {
     // TODO: should we assume -ii as -i -i?
     assert_eq!(
         parse("g!point ranking -ii"),
-        Some(Err(RankingUnknownOption {
+        Some(Err(UnknownOption {
             unknowns: vec!["-ii"]
         }))
     );
@@ -162,5 +189,19 @@ fn parse_test() {
     assert_eq!(
         parse("g!point ranking efficiency -i"),
         r(Some(Efficiency), true)
+    );
+
+    assert_eq!(parse("g!point graph"), Some(Ok(Graph { n: None })));
+    assert_eq!(
+        parse("g!point graph -n 10"),
+        Some(Ok(Graph { n: Some(10) }))
+    );
+    assert_eq!(
+        parse("g!point graph -n"),
+        Some(Err(MissingOrInvalidTokenAfterOption))
+    );
+    assert_eq!(
+        parse("g!point graph -n foo"),
+        Some(Err(MissingOrInvalidTokenAfterOption))
     );
 }
