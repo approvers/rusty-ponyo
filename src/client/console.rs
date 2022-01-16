@@ -52,8 +52,8 @@ impl ConsoleClient {
             const ATTACHMENT_CMD: &str = "!attachments";
 
             let (content, attachments) = {
-                if input.starts_with(ATTACHMENT_CMD) {
-                    for a in input[ATTACHMENT_CMD.len()..].trim().split(" ") {
+                if let Some(stripped) = input.strip_prefix(ATTACHMENT_CMD) {
+                    for a in stripped.trim().split(' ') {
                         attachments.push(ConsoleAttachment { name: a.trim() });
                     }
 
