@@ -359,7 +359,7 @@ impl GenkaiAuthDatabase for MongoDb {
             .find_one(doc! { "user_id": &user_id }, None)
             .await
             .context("failed to find pgp key")
-            .map(|x| x.map(|x| x.pgp_pub_key).flatten())
+            .map(|x| x.and_then(|x| x.pgp_pub_key))
     }
 
     async fn register_token(&mut self, user_id: u64, token: &str) -> Result<()> {
@@ -406,7 +406,7 @@ impl GenkaiAuthDatabase for MongoDb {
             .find_one(doc! { "user_id": &user_id }, None)
             .await
             .context("failed to find pgp key")
-            .map(|x| x.map(|x| x.token).flatten())
+            .map(|x| x.and_then(|x| x.token))
     }
 }
 
