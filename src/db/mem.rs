@@ -2,10 +2,7 @@ use {
     crate::bot::{
         alias::{model::MessageAlias, MessageAliasDatabase},
         auth::GenkaiAuthDatabase,
-        genkai_point::{
-            model::{Session, UserStat, GENKAI_POINT_MAX},
-            CreateNewSessionResult, GenkaiPointDatabase,
-        },
+        genkai_point::{model::Session, CreateNewSessionResult, GenkaiPointDatabase},
     },
     anyhow::{anyhow, Context as _, Result},
     async_trait::async_trait,
@@ -179,34 +176,8 @@ impl GenkaiPointDatabase for MemoryDB {
             .collect())
     }
 
-    async fn get_all_users_stats(&self) -> Result<Vec<UserStat>> {
-        let mut result: Vec<UserStat> = vec![];
-
-        for session in &self.sessions {
-            match result.iter_mut().find(|x| x.user_id == session.user_id) {
-                Some(stat) => {
-                    stat.genkai_point += session.calc_point();
-                    // += is not implemented on chrono::Duration
-                    stat.total_vc_duration = stat.total_vc_duration + session.duration();
-                }
-
-                None => {
-                    result.push(UserStat {
-                        user_id: session.user_id,
-                        genkai_point: session.calc_point(),
-                        total_vc_duration: session.duration(),
-                        efficiency: 0.0,
-                    });
-                }
-            }
-        }
-
-        for stat in &mut result {
-            stat.efficiency = (stat.genkai_point as f64 / GENKAI_POINT_MAX as f64)
-                / (stat.total_vc_duration.num_minutes() as f64 / 60.0);
-        }
-
-        Ok(result)
+    async fn get_all_sessions(&self) -> Result<Vec<Session>> {
+        Ok(self.sessions.clone())
     }
 }
 
