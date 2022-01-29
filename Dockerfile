@@ -14,7 +14,6 @@ WORKDIR /src
 COPY . /src/
 
 ENV NETTLE_STATIC=yes
-ENV RUSTFLAGS="-C target-cpu=x86-64"
 
 RUN --mount=type=cache,target=/root/.cargo/ \
     --mount=type=cache,target=/src/target \
