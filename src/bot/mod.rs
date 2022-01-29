@@ -9,6 +9,7 @@ use {
 pub mod alias;
 pub mod auth;
 pub mod genkai_point;
+pub mod vc_diff;
 
 pub(crate) trait Message: ThreadSafe {
     fn author(&self) -> &dyn User;
@@ -72,10 +73,12 @@ pub(crate) trait BotService: ThreadSafe {
 
     async fn on_message(
         &self,
-        db: &Synced<Self::Database>,
-        msg: &dyn Message,
-        ctx: &dyn Context,
-    ) -> Result<()>;
+        _db: &Synced<Self::Database>,
+        _msg: &dyn Message,
+        _ctx: &dyn Context,
+    ) -> Result<()> {
+        Ok(())
+    }
 
     // called on bot started and got who is currently joined to vc
     async fn on_vc_data_available(
