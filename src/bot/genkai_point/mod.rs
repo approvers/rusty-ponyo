@@ -1,14 +1,10 @@
 pub(crate) mod model;
-mod parse;
 mod plot;
 
 use {
     crate::{
         bot::{
-            genkai_point::{
-                model::{Session, UserStat},
-                parse::{Command, RankBy},
-            },
+            genkai_point::model::{Session, UserStat},
             BotService, Context, Message, SendAttachment, SendMessage,
         },
         Synced, ThreadSafe,
@@ -16,10 +12,73 @@ use {
     anyhow::{Context as _, Result},
     async_trait::async_trait,
     chrono::{DateTime, Duration, Utc},
+    clap::{ArgEnum, Args, CommandFactory, Parser},
     once_cell::sync::Lazy,
     std::{cmp::Ordering, collections::HashMap, fmt::Write, marker::PhantomData},
     tokio::sync::Mutex,
 };
+
+const NAME: &str = "rusty_ponyo::bot::genkai_point";
+const PREFIX: &str = "g!point";
+
+/// 特定のメッセージが送信されたときに、指定されたメッセージを同じ場所に送信します。
+#[derive(Debug, clap::Args)]
+#[clap(name=NAME, about, long_about=None)]
+struct Ui {
+    #[clap(subcommand)]
+    command: Command,
+}
+
+impl Ui {
+    fn command<'a>() -> clap::Command<'a> {
+        clap::Command::new(NAME).bin_name(PREFIX)
+    }
+}
+impl Parser for Ui {}
+impl CommandFactory for Ui {
+    fn into_app<'help>() -> clap::Command<'help> {
+        Self::augment_args(Self::command())
+    }
+    fn into_app_for_update<'help>() -> clap::Command<'help> {
+        Self::augment_args_for_update(Self::command())
+    }
+}
+
+#[derive(Debug, clap::Subcommand)]
+enum Command {
+    /// ヘルプメッセージを出します
+    Help,
+
+    /// ユーザーの限界ポイント情報を出します
+    Show {
+        /// 表示するユーザーのID
+        user_id: Option<u64>,
+    },
+
+    /// トップN人のVC時間の伸びをグラフにプロットします
+    Graph {
+        /// トップ何人分表示するか
+        #[clap(default_value_t = 5)]
+        n: u8,
+    },
+
+    /// ランキングを出します
+    Ranking {
+        /// ランキングを反転します
+        #[clap(long, short)]
+        invert: bool,
+
+        #[clap(arg_enum, default_value_t=RankingBy::Point)]
+        by: RankingBy,
+    },
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
+enum RankingBy {
+    Point,
+    Duration,
+    Efficiency,
+}
 
 #[async_trait]
 pub(crate) trait GenkaiPointDatabase: ThreadSafe {
@@ -138,9 +197,9 @@ impl<D: GenkaiPointDatabase> GenkaiPointBot<D> {
         &self,
         db: &Synced<impl GenkaiPointDatabase>,
         ctx: &dyn Context,
-        n: Option<u8>,
+        n: u8,
     ) -> Result<()> {
-        let n = n.unwrap_or(5).clamp(1, 11);
+        let n = n.clamp(1, 11);
 
         #[cfg(feature = "plot_plotters")]
         let plotter = plot::plotters::Plotters;
@@ -242,7 +301,7 @@ where
 
 #[async_trait]
 impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
-    const NAME: &'static str = "GenkaiPointBot";
+    const NAME: &'static str = NAME;
     type Database = D;
 
     async fn on_message(
@@ -251,48 +310,59 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
         msg: &dyn Message,
         ctx: &dyn Context,
     ) -> Result<()> {
-        match parse::parse(msg.content()) {
-            None => return Ok(()),
+        if !msg.content().starts_with(PREFIX) {
+            return Ok(());
+        }
 
-            // discarding all diagnostic informations :/
-            // TODO: more precious UI
-            Some(Ok(Command::Unspecified | Command::Unknown | Command::Help) | Err(_)) => {
-                ctx.send_text_message(include_str!("messages/help_text.txt"))
+        let words = match shellwords::split(msg.content()) {
+            Ok(w) => w,
+            Err(_) => {
+                return ctx
+                    .send_text_message("閉じられていない引用符があります")
                     .await
-                    .context("failed to send message")?;
             }
+        };
 
-            Some(Ok(Command::Show { user_id })) => {
+        let parsed = match Ui::try_parse_from(words) {
+            Ok(p) => p,
+            Err(e) => return ctx.send_text_message(&format!("```{e}```")).await,
+        };
+
+        match parsed.command {
+            // help command should be handled automatically by clap
+            Command::Help => {}
+
+            Command::Show { user_id } => {
                 self.show(db, ctx, user_id.unwrap_or_else(|| msg.author().id()))
                     .await?;
             }
 
-            Some(Ok(Command::Graph { n })) => {
+            Command::Graph { n } => {
                 self.graph(db, ctx, n).await?;
             }
 
             #[rustfmt::skip]
-            Some(Ok(Command::Ranking {
+            Command::Ranking {
                 by,
-                invert_specified: inv,
-            })) => {
-                match by.unwrap_or(RankBy::Point) {
-                    RankBy::Point => {
+                invert,
+            } => {
+                match by {
+                    RankingBy::Point => {
                         self.ranking(db, ctx,
                             "genkai point",
-                            comparator(|x| x.genkai_point, inv),
+                            comparator(|x| x.genkai_point, invert),
                         ).await
                     }
-                    RankBy::Duration => {
+                    RankingBy::Duration => {
                         self.ranking(db, ctx,
                             "total vc duration",
-                            comparator(|x| x.total_vc_duration, inv),
+                            comparator(|x| x.total_vc_duration, invert),
                         ).await
                     }
-                    RankBy::Efficiency => {
+                    RankingBy::Efficiency => {
                         self.ranking(db, ctx,
                             "genkai efficiency",
-                            comparator(|x| x.efficiency, inv),
+                            comparator(|x| x.efficiency, invert),
                         ).await
                     }
                 }?;

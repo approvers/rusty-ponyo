@@ -1,8 +1,7 @@
 use super::SendAttachment;
 
-mod commands;
+mod command;
 pub(crate) mod model;
-mod parser;
 
 use {
     crate::{
@@ -11,10 +10,62 @@ use {
     },
     anyhow::Result,
     async_trait::async_trait,
+    clap::{Args, CommandFactory, Parser},
     std::marker::PhantomData,
 };
 
+const NAME: &str = "rusty_ponyo::bot::alias";
 const PREFIX: &str = "g!alias";
+
+/// 特定のメッセージが送信されたときに、指定されたメッセージを同じ場所に送信します。
+#[derive(Debug, clap::Args)]
+#[clap(name=NAME, about, long_about=None)]
+struct Ui {
+    #[clap(subcommand)]
+    command: Command,
+}
+
+impl Ui {
+    fn command<'a>() -> clap::Command<'a> {
+        clap::Command::new(NAME).bin_name(PREFIX)
+    }
+}
+impl Parser for Ui {}
+impl CommandFactory for Ui {
+    fn into_app<'help>() -> clap::Command<'help> {
+        Self::augment_args(Self::command())
+    }
+    fn into_app_for_update<'help>() -> clap::Command<'help> {
+        Self::augment_args_for_update(Self::command())
+    }
+}
+
+#[derive(Debug, clap::Subcommand)]
+enum Command {
+    /// ヘルプメッセージを出します
+    Help,
+
+    /// 表示回数が多い順のランキングを出します
+    Ranking,
+
+    /// 現在登録されているエイリアス数を出します
+    Status,
+
+    /// エイリアスを削除します
+    Delete {
+        /// 消したいエイリアスのキー
+        key: String,
+    },
+
+    /// 新しいエイリアスを作成します
+    Make {
+        /// 反応するメッセージ（キー）
+        key: String,
+
+        /// 送信するメッセージ
+        message: Option<String>,
+    },
+}
 
 #[async_trait]
 pub(crate) trait MessageAliasDatabase: ThreadSafe {
@@ -30,7 +81,7 @@ pub(crate) struct MessageAliasBot<D: MessageAliasDatabase>(PhantomData<fn() -> D
 
 #[async_trait]
 impl<D: MessageAliasDatabase> BotService for MessageAliasBot<D> {
-    const NAME: &'static str = "MessageAliasBot";
+    const NAME: &'static str = NAME;
     type Database = D;
 
     async fn on_message(
@@ -39,7 +90,6 @@ impl<D: MessageAliasDatabase> BotService for MessageAliasBot<D> {
         msg: &dyn Message,
         ctx: &dyn Context,
     ) -> Result<()> {
-        // TODO: support commandAdd?
         if msg.content().starts_with(PREFIX) {
             if let Some(msg) = self.on_command(db, msg).await? {
                 ctx.send_message(SendMessage {
@@ -80,47 +130,31 @@ impl<D: MessageAliasDatabase> MessageAliasBot<D> {
     }
 
     async fn on_command(&self, db: &Synced<D>, message: &dyn Message) -> Result<Option<String>> {
-        use commands::*;
+        use command::*;
 
-        let parsed = match parser::parse(message.content()) {
-            Ok(Some(p)) => p,
-            // syntax error
-            Err(e) => return Ok(Some(e)),
-            _ => return Ok(None),
+        let words = match shellwords::split(message.content()) {
+            Ok(w) => w,
+            Err(_) => return Ok(Some("閉じられていない引用符があります".to_string())),
         };
 
-        if parsed.sub_command.is_none() {
-            return Ok(Some(help()));
-        }
+        let parsed = match Ui::try_parse_from(words) {
+            Ok(p) => p,
+            Err(e) => return Ok(Some(format!("```{e}```"))),
+        };
 
-        match parsed.sub_command.unwrap() {
-            "help" => Ok(Some(help())),
+        match parsed.command {
+            // help command should be handled automatically by clap
+            Command::Help => Ok(None),
+            Command::Status => Ok(Some(status(db).await?)),
+            Command::Ranking => Ok(Some(usage_ranking(db).await?)),
 
-            "delete" => {
-                let key = parsed.args.get(0);
+            Command::Delete { key } => delete(db, &key).await.map(Some),
 
-                if let Some(key) = key {
-                    return delete(db, key).await.map(Some);
-                }
-
-                Ok(Some(help()))
+            Command::Make { key, message: text } => {
+                make(db, &key, text.as_deref(), message.attachments())
+                    .await
+                    .map(Some)
             }
-
-            "make" => {
-                let key = parsed.args.get(0);
-                let value = parsed.args.get(1).map(|x| x.as_str());
-
-                if let Some(key) = key {
-                    return make(db, key, value, message.attachments()).await.map(Some);
-                }
-
-                Ok(Some(help()))
-            }
-
-            "status" => Ok(Some(status(db).await?)),
-            "ranking" => Ok(Some(usage_ranking(db).await?)),
-
-            _ => Ok(Some(help())),
         }
     }
 }

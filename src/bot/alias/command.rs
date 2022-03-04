@@ -13,23 +13,6 @@ use {
     chrono::Utc,
 };
 
-#[rustfmt::skip]
-pub(super) fn help() -> String {
-r#"```asciidoc
-= rusty_ponyo::alias =
-g!alias [subcommand] [args...]
-
->>> 引数において " は省略できません <<<
-
-= subcommands =
-    status                       :: 現在登録されているエイリアス数を出します
-    help                         :: この文を出します
-    make "[キー]" "[メッセージ]" :: エイリアスを作成します
-    delete "[キー]"              :: エイリアスを削除します
-    ranking                     :: 表示回数が多い順にエイリアスを表示します
-```"#.into()
-}
-
 pub(super) async fn status(db: &Synced<impl MessageAliasDatabase>) -> Result<String> {
     let len = db.read().await.len().await?;
     Ok(format!("```\n現在登録されているエイリアス数: {}\n```", len))

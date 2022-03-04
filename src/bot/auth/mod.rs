@@ -2,6 +2,7 @@ use {
     crate::bot::{BotService, Context, Message, Synced, ThreadSafe},
     anyhow::{Context as _, Result},
     async_trait::async_trait,
+    clap::{Args, CommandFactory, Parser},
     rand::{prelude::StdRng, Rng, SeedableRng},
     sequoia_openpgp::{
         cert::CertParser,
@@ -14,6 +15,58 @@ use {
     std::{io::Write, marker::PhantomData, time::Duration},
     url::{Host, Origin, Url},
 };
+
+const NAME: &str = "rusty_ponyo::bot::auth";
+const PREFIX: &str = "g!auth";
+
+/// 限界認証情報の設定管理を行います
+#[derive(Debug, clap::Args)]
+#[clap(name=NAME, about, long_about=None)]
+struct Ui {
+    #[clap(subcommand)]
+    command: Command,
+}
+
+impl Ui {
+    fn command<'a>() -> clap::Command<'a> {
+        clap::Command::new(NAME).bin_name(PREFIX)
+    }
+}
+impl Parser for Ui {}
+impl CommandFactory for Ui {
+    fn into_app<'help>() -> clap::Command<'help> {
+        Self::augment_args(Self::command())
+    }
+    fn into_app_for_update<'help>() -> clap::Command<'help> {
+        Self::augment_args_for_update(Self::command())
+    }
+}
+
+#[derive(Debug, clap::Subcommand)]
+enum Command {
+    /// ヘルプメッセージを出します
+    Help,
+
+    Set {
+        #[clap(subcommand)]
+        what: SetCommand,
+    },
+
+    /// あなたのトークンを作成してDMに送信します
+    Token,
+
+    /// あなたのトークンを無効化します
+    Revoke,
+}
+
+#[derive(Debug, clap::Subcommand)]
+enum SetCommand {
+    /// PGP公開鍵を設定します
+    Pgp {
+        /// 公開鍵のURL
+        src_url: String,
+    },
+}
 
 #[async_trait]
 pub(crate) trait GenkaiAuthDatabase: ThreadSafe {
@@ -32,7 +85,7 @@ pub(crate) struct GenkaiAuthBot<D> {
 
 #[async_trait]
 impl<D: GenkaiAuthDatabase> BotService for GenkaiAuthBot<D> {
-    const NAME: &'static str = "GenkaiAuthBot";
+    const NAME: &'static str = NAME;
 
     type Database = D;
 
@@ -42,17 +95,33 @@ impl<D: GenkaiAuthDatabase> BotService for GenkaiAuthBot<D> {
         msg: &dyn Message,
         ctx: &dyn Context,
     ) -> Result<()> {
-        let tokens = msg.content().split_ascii_whitespace().collect::<Vec<_>>();
+        if !msg.content().starts_with(PREFIX) {
+            return Ok(());
+        }
 
-        const PREFIX: &str = "g!auth";
+        let words = match shellwords::split(msg.content()) {
+            Ok(w) => w,
+            Err(_) => {
+                return ctx
+                    .send_text_message("閉じられていない引用符があります")
+                    .await
+            }
+        };
 
-        match tokens.as_slice() {
-            [PREFIX, "set", "pgp", url] => self.set_pgp(db, msg, ctx, url).await?,
-            [PREFIX, "token"] => Self::token(db, msg, ctx).await?,
-            [PREFIX, "revoke"] => Self::revoke(db, msg, ctx).await?,
-            [PREFIX, ..] => Self::help(ctx).await?,
+        let parsed = match Ui::try_parse_from(words) {
+            Ok(p) => p,
+            Err(e) => return ctx.send_text_message(&format!("```{e}```")).await,
+        };
 
-            _ => {}
+        match parsed.command {
+            // help command should be handled automatically by clap
+            Command::Help => {}
+
+            Command::Set {
+                what: SetCommand::Pgp { src_url },
+            } => self.set_pgp(db, msg, ctx, &src_url).await?,
+            Command::Token => Self::token(db, msg, ctx).await?,
+            Command::Revoke => Self::revoke(db, msg, ctx).await?,
         }
 
         Ok(())
@@ -65,11 +134,6 @@ impl<D: GenkaiAuthDatabase> GenkaiAuthBot<D> {
             pgp_pubkey_source_domain_whitelist: pubkey_whitelist,
             phantom: PhantomData,
         }
-    }
-
-    async fn help(ctx: &dyn Context) -> Result<()> {
-        ctx.send_text_message(include_str!("messages/help_text.txt"))
-            .await
     }
 
     async fn set_pgp(
