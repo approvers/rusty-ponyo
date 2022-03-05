@@ -40,6 +40,7 @@ pub(super) async fn usage_ranking(db: &Synced<impl MessageAliasDatabase>) -> Res
 const KEY_LENGTH_LIMIT: usize = 100;
 const MSG_LENGTH_LIMIT: usize = 500;
 const ATTACHMENTS_MAX_COUNT: usize = 1;
+const MAX_FILE_SIZE: usize = 1024 * 512;
 
 pub(super) async fn make(
     db: &Synced<impl MessageAliasDatabase>,
@@ -75,6 +76,17 @@ pub(super) async fn make(
         ));
     }
 
+    for attachment in attachments {
+        if attachment.size() > MAX_FILE_SIZE {
+            error_msgs.push(format!(
+                "添付ファイル(\"{}\")のサイズが大きすぎます({:.2}KB)。{}KB以下にしてください。",
+                attachment.name(),
+                attachment.size() as f64 / 1024.0,
+                MAX_FILE_SIZE / 1024,
+            ));
+        }
+    }
+
     if key_len > KEY_LENGTH_LIMIT {
         error_msgs.push(format!(
             "長すぎるキー({}文字)です。{}文字以下にしてください。",
@@ -93,7 +105,7 @@ pub(super) async fn make(
         return Ok(error_msgs.join("\n"));
     }
 
-    // we cannot use iter().mao() because download method is async function.
+    // we cannot use iter().map() because download method is async function.
     let mut downloadad_attachments = vec![];
 
     for attachment in attachments {

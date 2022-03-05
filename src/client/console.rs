@@ -165,6 +165,10 @@ impl Attachment for ConsoleAttachment<'_> {
         self.name
     }
 
+    fn size(&self) -> usize {
+        0
+    }
+
     async fn download(&self) -> Result<Vec<u8>> {
         Ok(vec![])
     }

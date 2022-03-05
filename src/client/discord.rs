@@ -400,6 +400,10 @@ impl Attachment for DiscordAttachment<'_> {
         &self.0.filename
     }
 
+    fn size(&self) -> usize {
+        self.0.size as usize
+    }
+
     async fn download(&self) -> Result<Vec<u8>> {
         self.0
             .download()
