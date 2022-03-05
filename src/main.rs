@@ -5,10 +5,7 @@ mod client;
 mod db;
 
 use {
-    crate::bot::{
-        alias::MessageAliasBot, auth::GenkaiAuthBot, genkai_point::GenkaiPointBot,
-        vc_diff::VcDiffBot,
-    },
+    crate::bot::{alias::MessageAliasBot, auth::GenkaiAuthBot, genkai_point::GenkaiPointBot},
     anyhow::{Context as _, Result},
     std::sync::Arc,
     tokio::sync::RwLock,
@@ -67,7 +64,6 @@ async fn main() -> Result<()> {
     client
         .add_service(MessageAliasBot::new(), Arc::clone(&db))
         .add_service(GenkaiPointBot::new(), Arc::clone(&db))
-        .add_service(VcDiffBot::new(), Arc::new(RwLock::new(())))
         .add_service(GenkaiAuthBot::new(pgp_whitelist), Arc::clone(&auth_db));
 
     #[cfg(feature = "console_client")]

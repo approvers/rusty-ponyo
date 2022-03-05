@@ -9,7 +9,6 @@ use {
 pub mod alias;
 pub mod auth;
 pub mod genkai_point;
-pub mod vc_diff;
 
 pub(crate) trait Message: ThreadSafe {
     fn author(&self) -> &dyn User;
