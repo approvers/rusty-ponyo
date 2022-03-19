@@ -4,14 +4,10 @@ mod command;
 pub(crate) mod model;
 
 use {
-    crate::{
-        bot::{alias::model::MessageAlias, BotService, Context, Message, SendMessage},
-        Synced, ThreadSafe,
-    },
+    crate::bot::{alias::model::MessageAlias, BotService, Context, Message, SendMessage},
     anyhow::Result,
     async_trait::async_trait,
     clap::{Args, CommandFactory, Parser},
-    std::marker::PhantomData,
 };
 
 const NAME: &str = "rusty_ponyo::bot::alias";
@@ -68,30 +64,28 @@ enum Command {
 }
 
 #[async_trait]
-pub(crate) trait MessageAliasDatabase: ThreadSafe {
-    async fn save(&mut self, alias: MessageAlias) -> Result<()>;
+pub(crate) trait MessageAliasDatabase: Send + Sync {
+    async fn save(&self, alias: MessageAlias) -> Result<()>;
     async fn get(&self, key: &str) -> Result<Option<MessageAlias>>;
-    async fn get_and_increment_usage_count(&mut self, key: &str) -> Result<Option<MessageAlias>>;
-    async fn delete(&mut self, key: &str) -> Result<bool>;
+    async fn get_and_increment_usage_count(&self, key: &str) -> Result<Option<MessageAlias>>;
+    async fn delete(&self, key: &str) -> Result<bool>;
     async fn len(&self) -> Result<u32>;
     async fn usage_count_top_n(&self, n: usize) -> Result<Vec<MessageAlias>>;
 }
 
-pub(crate) struct MessageAliasBot<D: MessageAliasDatabase>(PhantomData<fn() -> D>);
+pub(crate) struct MessageAliasBot<D: MessageAliasDatabase> {
+    db: D,
+}
 
 #[async_trait]
 impl<D: MessageAliasDatabase> BotService for MessageAliasBot<D> {
-    const NAME: &'static str = NAME;
-    type Database = D;
+    fn name(&self) -> &'static str {
+        NAME
+    }
 
-    async fn on_message(
-        &self,
-        db: &Synced<Self::Database>,
-        msg: &dyn Message,
-        ctx: &dyn Context,
-    ) -> Result<()> {
+    async fn on_message(&self, msg: &dyn Message, ctx: &dyn Context) -> Result<()> {
         if msg.content().starts_with(PREFIX) {
-            if let Some(msg) = self.on_command(db, msg).await? {
+            if let Some(msg) = self.on_command(msg).await? {
                 ctx.send_message(SendMessage {
                     content: &msg,
                     attachments: &[],
@@ -100,11 +94,7 @@ impl<D: MessageAliasDatabase> BotService for MessageAliasBot<D> {
             }
         }
 
-        if let Some(registered_alias) = db
-            .write()
-            .await
-            .get_and_increment_usage_count(msg.content())
-            .await?
+        if let Some(registered_alias) = self.db.get_and_increment_usage_count(msg.content()).await?
         {
             ctx.send_message(SendMessage {
                 content: &registered_alias.message,
@@ -125,11 +115,11 @@ impl<D: MessageAliasDatabase> BotService for MessageAliasBot<D> {
 }
 
 impl<D: MessageAliasDatabase> MessageAliasBot<D> {
-    pub(crate) fn new() -> Self {
-        Self(PhantomData)
+    pub(crate) fn new(db: D) -> Self {
+        Self { db }
     }
 
-    async fn on_command(&self, db: &Synced<D>, message: &dyn Message) -> Result<Option<String>> {
+    async fn on_command(&self, message: &dyn Message) -> Result<Option<String>> {
         use command::*;
 
         let words = match shellwords::split(message.content()) {
@@ -145,13 +135,13 @@ impl<D: MessageAliasDatabase> MessageAliasBot<D> {
         match parsed.command {
             // help command should be handled automatically by clap
             Command::Help => Ok(None),
-            Command::Status => Ok(Some(status(db).await?)),
-            Command::Ranking => Ok(Some(usage_ranking(db).await?)),
+            Command::Status => Ok(Some(status(&self.db).await?)),
+            Command::Ranking => Ok(Some(usage_ranking(&self.db).await?)),
 
-            Command::Delete { key } => delete(db, &key).await.map(Some),
+            Command::Delete { key } => delete(&self.db, &key).await.map(Some),
 
             Command::Make { key, message: text } => {
-                make(db, &key, text.as_deref(), message.attachments())
+                make(&self.db, &key, text.as_deref(), message.attachments())
                     .await
                     .map(Some)
             }

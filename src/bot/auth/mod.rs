@@ -1,5 +1,5 @@
 use {
-    crate::bot::{BotService, Context, Message, Synced, ThreadSafe},
+    crate::bot::{BotService, Context, Message},
     anyhow::{Context as _, Result},
     async_trait::async_trait,
     clap::{Args, CommandFactory, Parser},
@@ -12,7 +12,7 @@ use {
         Cert,
     },
     sha2::Digest,
-    std::{io::Write, marker::PhantomData, time::Duration},
+    std::{io::Write, time::Duration},
     url::{Host, Origin, Url},
 };
 
@@ -69,32 +69,27 @@ enum SetCommand {
 }
 
 #[async_trait]
-pub(crate) trait GenkaiAuthDatabase: ThreadSafe {
-    async fn register_pgp_key(&mut self, user_id: u64, cert: &str) -> Result<()>;
+pub(crate) trait GenkaiAuthDatabase: Send + Sync {
+    async fn register_pgp_key(&self, user_id: u64, cert: &str) -> Result<()>;
     async fn get_pgp_key(&self, user_id: u64) -> Result<Option<String>>;
 
-    async fn register_token(&mut self, user_id: u64, hashed_token: &str) -> Result<()>;
-    async fn revoke_token(&mut self, user_id: u64) -> Result<()>;
+    async fn register_token(&self, user_id: u64, hashed_token: &str) -> Result<()>;
+    async fn revoke_token(&self, user_id: u64) -> Result<()>;
     async fn get_token(&self, user_id: u64) -> Result<Option<String>>;
 }
 
 pub(crate) struct GenkaiAuthBot<D> {
+    db: D,
     pgp_pubkey_source_domain_whitelist: Vec<String>,
-    phantom: PhantomData<fn() -> D>,
 }
 
 #[async_trait]
 impl<D: GenkaiAuthDatabase> BotService for GenkaiAuthBot<D> {
-    const NAME: &'static str = NAME;
+    fn name(&self) -> &'static str {
+        NAME
+    }
 
-    type Database = D;
-
-    async fn on_message(
-        &self,
-        db: &Synced<Self::Database>,
-        msg: &dyn Message,
-        ctx: &dyn Context,
-    ) -> Result<()> {
+    async fn on_message(&self, msg: &dyn Message, ctx: &dyn Context) -> Result<()> {
         if !msg.content().starts_with(PREFIX) {
             return Ok(());
         }
@@ -119,9 +114,9 @@ impl<D: GenkaiAuthDatabase> BotService for GenkaiAuthBot<D> {
 
             Command::Set {
                 what: SetCommand::Pgp { src_url },
-            } => self.set_pgp(db, msg, ctx, &src_url).await?,
-            Command::Token => Self::token(db, msg, ctx).await?,
-            Command::Revoke => Self::revoke(db, msg, ctx).await?,
+            } => self.set_pgp(msg, ctx, &src_url).await?,
+            Command::Token => self.token(msg, ctx).await?,
+            Command::Revoke => self.revoke(msg, ctx).await?,
         }
 
         Ok(())
@@ -129,20 +124,14 @@ impl<D: GenkaiAuthDatabase> BotService for GenkaiAuthBot<D> {
 }
 
 impl<D: GenkaiAuthDatabase> GenkaiAuthBot<D> {
-    pub(crate) fn new(pubkey_whitelist: Vec<String>) -> Self {
+    pub(crate) fn new(db: D, pubkey_whitelist: Vec<String>) -> Self {
         Self {
+            db,
             pgp_pubkey_source_domain_whitelist: pubkey_whitelist,
-            phantom: PhantomData,
         }
     }
 
-    async fn set_pgp(
-        &self,
-        db: &Synced<D>,
-        msg: &dyn Message,
-        ctx: &dyn Context,
-        url: &str,
-    ) -> Result<()> {
+    async fn set_pgp(&self, msg: &dyn Message, ctx: &dyn Context, url: &str) -> Result<()> {
         let verify_result = match self.verify_url(url) {
             Ok(_) => download_gpg_key(url).await,
             Err(e) => Err(e),
@@ -160,8 +149,7 @@ impl<D: GenkaiAuthDatabase> GenkaiAuthBot<D> {
             }
         };
 
-        db.write()
-            .await
+        self.db
             .register_pgp_key(msg.author().id(), &cert)
             .await
             .context("failed to register gpg key")?;
@@ -171,17 +159,16 @@ impl<D: GenkaiAuthDatabase> GenkaiAuthBot<D> {
         Ok(())
     }
 
-    async fn token(db: &Synced<D>, msg: &dyn Message, ctx: &dyn Context) -> Result<()> {
+    async fn token(&self, msg: &dyn Message, ctx: &dyn Context) -> Result<()> {
         let author = msg.author();
 
-        if db.read().await.get_token(author.id()).await?.is_some() {
+        if self.db.get_token(author.id()).await?.is_some() {
             ctx.send_text_message("すでにトークンが登録されています。新しいトークンを作成したい場合は先に revoke してください。現在登録されているトークンの開示は出来ません。").await?;
             return Ok(());
         }
 
-        let gpg_key = db
-            .read()
-            .await
+        let gpg_key = self
+            .db
             .get_pgp_key(msg.author().id())
             .await
             .context("failed to fetch user's gpg key")?;
@@ -198,8 +185,7 @@ impl<D: GenkaiAuthDatabase> GenkaiAuthBot<D> {
         let hashed = hasher.finalize();
         let hashed = hex::encode(&hashed);
 
-        db.write()
-            .await
+        self.db
             .register_token(msg.author().id(), &hashed)
             .await
             .context("failed to register new token")?;
@@ -220,9 +206,8 @@ impl<D: GenkaiAuthDatabase> GenkaiAuthBot<D> {
         Ok(())
     }
 
-    async fn revoke(db: &Synced<D>, msg: &dyn Message, ctx: &dyn Context) -> Result<()> {
-        db.write()
-            .await
+    async fn revoke(&self, msg: &dyn Message, ctx: &dyn Context) -> Result<()> {
+        self.db
             .revoke_token(msg.author().id())
             .await
             .context("failed to revoke token")?;

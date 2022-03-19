@@ -1,9 +1,5 @@
 use {
-    crate::{
-        bot::{Attachment, BotService, Context, Message, SendMessage, User},
-        client::{ServiceEntry, ServiceEntryInner},
-        Synced, ThreadSafe,
-    },
+    crate::bot::{Attachment, BotService, Context, Message, SendMessage, User},
     anyhow::Result,
     async_trait::async_trait,
     std::{
@@ -12,22 +8,20 @@ use {
     },
 };
 
-pub(crate) struct ConsoleClient {
-    services: Vec<Box<dyn ServiceEntry>>,
+pub(crate) struct ConsoleClient<'a> {
+    services: Vec<Box<dyn BotService + 'a>>,
 }
 
-impl ConsoleClient {
+impl<'a> ConsoleClient<'a> {
     pub fn new() -> Self {
         Self { services: vec![] }
     }
 
-    pub fn add_service<S, D>(&mut self, service: S, db: Synced<D>) -> &mut Self
+    pub fn add_service<S>(&mut self, service: S) -> &mut Self
     where
-        S: BotService<Database = D> + 'static,
-        D: ThreadSafe + 'static,
+        S: BotService + Send + 'a,
     {
-        self.services
-            .push(Box::new(ServiceEntryInner { service, db }));
+        self.services.push(Box::new(service));
         self
     }
 
@@ -78,7 +72,7 @@ impl ConsoleClient {
                 }
             };
 
-            for service in &self.services {
+            for service in self.services.iter() {
                 let begin = Instant::now();
 
                 let ctx = ConsoleContext {

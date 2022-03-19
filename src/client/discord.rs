@@ -1,9 +1,5 @@
 use {
-    crate::{
-        bot::{Attachment, BotService, Context, Message, SendMessage, User},
-        client::{ServiceEntry, ServiceEntryInner},
-        Synced, ThreadSafe,
-    },
+    crate::bot::{Attachment, BotService, Context, Message, SendMessage, User},
     anyhow::{Context as _, Result},
     async_trait::async_trait,
     serenity::{
@@ -28,7 +24,7 @@ use {
 };
 
 pub(crate) struct DiscordClient {
-    services: Vec<Box<dyn ServiceEntry>>,
+    services: Vec<Box<dyn BotService>>,
 }
 
 impl DiscordClient {
@@ -36,13 +32,11 @@ impl DiscordClient {
         Self { services: vec![] }
     }
 
-    pub fn add_service<S, D>(&mut self, service: S, db: Synced<D>) -> &mut Self
+    pub fn add_service<S>(&mut self, service: S) -> &mut Self
     where
-        S: BotService<Database = D> + 'static,
-        D: ThreadSafe + 'static,
+        S: BotService + Send + 'static,
     {
-        self.services
-            .push(Box::new(ServiceEntryInner { service, db }));
+        self.services.push(Box::new(service));
         self
     }
 
@@ -64,7 +58,7 @@ const APPROVERS_GUILD_ID: u64 = 683939861539192860;
 const APPROVERS_DEFAULT_CHANNEL_ID: u64 = 690909527461199922;
 
 struct EvHandlerInner {
-    services: Vec<Box<dyn ServiceEntry>>,
+    services: Vec<Box<dyn BotService>>,
     vc_joined_users: Mutex<HashSet<SerenityUserId>>,
     nickname_cache: RwLock<NicknameCache>,
 }
@@ -74,7 +68,7 @@ struct EvHandler {
 }
 
 impl EvHandler {
-    fn new(services: Vec<Box<dyn ServiceEntry>>) -> Self {
+    fn new(services: Vec<Box<dyn BotService>>) -> Self {
         Self {
             inner: Arc::new(EvHandlerInner {
                 services,
@@ -91,7 +85,7 @@ impl EvHandler {
         f: F,
     ) where
         Fu: Future<Output = Result<()>> + Send + 'a,
-        F: Fn(&'a dyn ServiceEntry) -> Fu,
+        F: Fn(&'a dyn BotService) -> Fu,
     {
         for service in &inner.services {
             let result = f(service.as_ref()).await;
@@ -412,7 +406,6 @@ impl Attachment for DiscordAttachment<'_> {
     }
 }
 
-#[derive(Clone)]
 struct DiscordContext<'a> {
     origin: &'a SerenityContext,
     channel_id: SerenityChannelId,

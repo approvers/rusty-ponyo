@@ -20,6 +20,7 @@ use {
     tokio_stream::StreamExt,
 };
 
+#[derive(Clone)]
 pub(crate) struct MongoDb {
     inner: Database,
 }
@@ -42,7 +43,7 @@ const MESSAGE_ALIAS_COLLECTION_NAME: &str = "MessageAlias";
 
 #[async_trait]
 impl MessageAliasDatabase for MongoDb {
-    async fn save(&mut self, alias: MessageAlias) -> Result<()> {
+    async fn save(&self, alias: MessageAlias) -> Result<()> {
         self.inner
             .collection::<MongoMessageAlias>(MESSAGE_ALIAS_COLLECTION_NAME)
             .insert_one(MongoMessageAlias::from(alias), None)
@@ -61,7 +62,7 @@ impl MessageAliasDatabase for MongoDb {
             .context("failed to deserialize alias")
     }
 
-    async fn get_and_increment_usage_count(&mut self, key: &str) -> Result<Option<MessageAlias>> {
+    async fn get_and_increment_usage_count(&self, key: &str) -> Result<Option<MessageAlias>> {
         let result = self.get(key).await?;
 
         if result.is_some() {
@@ -96,7 +97,7 @@ impl MessageAliasDatabase for MongoDb {
             .map(|x| x as u32)
     }
 
-    async fn delete(&mut self, key: &str) -> Result<bool> {
+    async fn delete(&self, key: &str) -> Result<bool> {
         self.inner
             .collection::<MongoMessageAlias>(MESSAGE_ALIAS_COLLECTION_NAME)
             .delete_one(doc! { "key": key }, None)
@@ -167,7 +168,7 @@ impl MongoDb {
 #[async_trait]
 impl GenkaiPointDatabase for MongoDb {
     async fn create_new_session(
-        &mut self,
+        &self,
         user_id: u64,
         joined_at: DateTime<Utc>,
     ) -> Result<CreateNewSessionResult> {
@@ -246,7 +247,7 @@ impl GenkaiPointDatabase for MongoDb {
         Ok(exists)
     }
 
-    async fn close_session(&mut self, user_id: u64, left_at: DateTime<Utc>) -> Result<()> {
+    async fn close_session(&self, user_id: u64, left_at: DateTime<Utc>) -> Result<()> {
         let collection = self
             .inner
             .collection::<MongoSession>(GENKAI_POINT_COLLECTION_NAME);
@@ -333,7 +334,7 @@ const GENKAI_AUTH_COLLECTION_NAME: &str = "GenkaiAuth";
 
 #[async_trait]
 impl GenkaiAuthDatabase for MongoDb {
-    async fn register_pgp_key(&mut self, user_id: u64, key: &str) -> Result<()> {
+    async fn register_pgp_key(&self, user_id: u64, key: &str) -> Result<()> {
         let user_id = user_id.to_string();
 
         self.inner
@@ -362,7 +363,7 @@ impl GenkaiAuthDatabase for MongoDb {
             .map(|x| x.and_then(|x| x.pgp_pub_key))
     }
 
-    async fn register_token(&mut self, user_id: u64, token: &str) -> Result<()> {
+    async fn register_token(&self, user_id: u64, token: &str) -> Result<()> {
         let user_id = user_id.to_string();
 
         self.inner
@@ -380,7 +381,7 @@ impl GenkaiAuthDatabase for MongoDb {
         Ok(())
     }
 
-    async fn revoke_token(&mut self, user_id: u64) -> Result<()> {
+    async fn revoke_token(&self, user_id: u64) -> Result<()> {
         let user_id = user_id.to_string();
 
         self.inner

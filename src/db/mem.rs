@@ -8,25 +8,44 @@ use {
     async_trait::async_trait,
     chrono::{DateTime, Duration, Utc},
     serde::Serialize,
-    std::collections::HashMap,
+    std::{
+        collections::HashMap,
+        ops::{Deref, DerefMut},
+        sync::Arc,
+    },
+    tokio::sync::Mutex,
 };
 
 #[derive(Serialize)]
-pub(crate) struct MemoryDB {
+struct MemoryDBInner {
     aliases: Vec<MessageAlias>,
     sessions: Vec<Session>,
     auth_entries: HashMap<u64, AuthEntry>,
 }
 
+pub(crate) struct MemoryDB(Arc<Mutex<MemoryDBInner>>);
+
+impl Clone for MemoryDB {
+    fn clone(&self) -> Self {
+        Self(Arc::clone(&self.0))
+    }
+}
+
 impl MemoryDB {
     pub(crate) fn new() -> Self {
-        Self {
+        Self(Arc::new(Mutex::new(MemoryDBInner {
             aliases: vec![],
             sessions: vec![],
             auth_entries: HashMap::new(),
-        }
+        })))
     }
 
+    async fn inner(&self) -> impl Deref<Target = MemoryDBInner> + DerefMut + '_ {
+        self.0.lock().await
+    }
+}
+
+impl MemoryDBInner {
     pub(crate) async fn dump(&self) -> Result<()> {
         let json = serde_json::to_string_pretty(self).context("failed to serialize")?;
 
@@ -40,22 +59,31 @@ impl MemoryDB {
 
 #[async_trait]
 impl MessageAliasDatabase for MemoryDB {
-    async fn save(&mut self, alias: MessageAlias) -> Result<()> {
-        self.aliases.push(alias);
-        self.dump().await?;
+    async fn save(&self, alias: MessageAlias) -> Result<()> {
+        let mut me = self.inner().await;
+        me.aliases.push(alias);
+        me.dump().await?;
 
         Ok(())
     }
 
     async fn get(&self, key: &str) -> Result<Option<MessageAlias>> {
-        Ok(self.aliases.iter().find(|x| x.key == key).cloned())
+        Ok(self
+            .inner()
+            .await
+            .aliases
+            .iter()
+            .find(|x| x.key == key)
+            .cloned())
     }
 
-    async fn get_and_increment_usage_count(&mut self, key: &str) -> Result<Option<MessageAlias>> {
+    async fn get_and_increment_usage_count(&self, key: &str) -> Result<Option<MessageAlias>> {
         let e = self.get(key).await;
 
         if let Ok(Some(_)) = e {
-            self.aliases
+            self.inner()
+                .await
+                .aliases
                 .iter_mut()
                 .find(|x| x.key == key)
                 .unwrap()
@@ -65,24 +93,25 @@ impl MessageAliasDatabase for MemoryDB {
         e
     }
 
-    async fn delete(&mut self, key: &str) -> Result<bool> {
-        let index = self.aliases.iter().position(|x| x.key == key);
+    async fn delete(&self, key: &str) -> Result<bool> {
+        let mut me = self.inner().await;
+        let index = me.aliases.iter().position(|x| x.key == key);
 
         if let Some(index) = index {
-            self.aliases.remove(index);
+            me.aliases.remove(index);
         }
 
-        self.dump().await?;
+        me.dump().await?;
 
         Ok(index.is_some())
     }
 
     async fn len(&self) -> Result<u32> {
-        Ok(self.aliases.len() as _)
+        Ok(self.inner().await.aliases.len() as _)
     }
 
     async fn usage_count_top_n(&self, n: usize) -> Result<Vec<MessageAlias>> {
-        let mut p = self.aliases.clone();
+        let mut p = self.inner().await.aliases.clone();
         p.sort_by_key(|x| x.usage_count);
         p.truncate(n);
 
@@ -93,7 +122,7 @@ impl MessageAliasDatabase for MemoryDB {
 #[async_trait]
 impl GenkaiPointDatabase for MemoryDB {
     async fn create_new_session(
-        &mut self,
+        &self,
         user_id: u64,
         joined_at: DateTime<Utc>,
     ) -> Result<CreateNewSessionResult> {
@@ -101,36 +130,35 @@ impl GenkaiPointDatabase for MemoryDB {
             return Ok(CreateNewSessionResult::UnclosedSessionExists);
         }
 
-        self.sessions.sort_unstable_by_key(|x| x.joined_at);
+        let mut me = self.inner().await;
+        me.sessions.sort_unstable_by_key(|x| x.joined_at);
 
-        if let Some(session) = self
-            .sessions
-            .iter_mut()
-            .rev()
-            .find(|x| x.user_id == user_id)
-        {
+        if let Some(session) = me.sessions.iter_mut().rev().find(|x| x.user_id == user_id) {
             if let Some(left_at) = session.left_at {
                 if (Utc::now() - left_at) < Duration::minutes(5) {
                     session.left_at = None;
-                    self.dump().await?;
+                    me.dump().await?;
                     return Ok(CreateNewSessionResult::SessionResumed);
                 }
             }
         }
 
-        self.sessions.push(Session {
+        me.sessions.push(Session {
             user_id,
             joined_at,
             left_at: None,
         });
 
-        self.dump().await?;
+        me.dump().await?;
 
         Ok(CreateNewSessionResult::CreatedNewSession)
     }
 
     async fn unclosed_session_exists(&self, user_id: u64) -> Result<bool> {
         Ok(self
+            .0
+            .lock()
+            .await
             .sessions
             .iter()
             .filter(|x| x.user_id == user_id)
@@ -138,24 +166,29 @@ impl GenkaiPointDatabase for MemoryDB {
     }
 
     async fn close_session(
-        &mut self,
+        &self,
         user_id: u64,
         left_at: chrono::DateTime<chrono::Utc>,
     ) -> Result<()> {
-        self.sessions
+        let mut me = self.inner().await;
+
+        me.sessions
             .iter_mut()
             .filter(|x| x.user_id == user_id)
             .find(|x| x.left_at.is_none())
             .ok_or_else(|| anyhow!("there is no unclosed session"))?
             .left_at = Some(left_at);
 
-        self.dump().await?;
+        me.dump().await?;
 
         Ok(())
     }
 
     async fn get_all_users_who_has_unclosed_session(&self) -> Result<Vec<u64>> {
         let mut list = self
+            .0
+            .lock()
+            .await
             .sessions
             .iter()
             .filter(|x| x.left_at.is_none())
@@ -169,6 +202,9 @@ impl GenkaiPointDatabase for MemoryDB {
 
     async fn get_users_all_sessions(&self, user_id: u64) -> Result<Vec<Session>> {
         Ok(self
+            .0
+            .lock()
+            .await
             .sessions
             .iter()
             .filter(|x| x.user_id == user_id)
@@ -177,7 +213,7 @@ impl GenkaiPointDatabase for MemoryDB {
     }
 
     async fn get_all_sessions(&self) -> Result<Vec<Session>> {
-        Ok(self.sessions.clone())
+        Ok(self.inner().await.sessions.clone())
     }
 }
 
@@ -189,33 +225,52 @@ struct AuthEntry {
 
 #[async_trait]
 impl GenkaiAuthDatabase for MemoryDB {
-    async fn register_pgp_key(&mut self, user_id: u64, key: &str) -> Result<()> {
-        self.auth_entries.entry(user_id).or_default().pgp_pub_key = Some(key.to_string());
+    async fn register_pgp_key(&self, user_id: u64, key: &str) -> Result<()> {
+        self.inner()
+            .await
+            .auth_entries
+            .entry(user_id)
+            .or_default()
+            .pgp_pub_key = Some(key.to_string());
 
         Ok(())
     }
 
     async fn get_pgp_key(&self, user_id: u64) -> Result<Option<String>> {
         Ok(self
+            .inner()
+            .await
             .auth_entries
             .get(&user_id)
             .and_then(|x| x.pgp_pub_key.clone()))
     }
 
-    async fn register_token(&mut self, user_id: u64, token: &str) -> Result<()> {
-        self.auth_entries.entry(user_id).or_default().token = Some(token.to_string());
+    async fn register_token(&self, user_id: u64, token: &str) -> Result<()> {
+        self.inner()
+            .await
+            .auth_entries
+            .entry(user_id)
+            .or_default()
+            .token = Some(token.to_string());
 
         Ok(())
     }
 
-    async fn revoke_token(&mut self, user_id: u64) -> Result<()> {
-        self.auth_entries.entry(user_id).or_default().token = None;
+    async fn revoke_token(&self, user_id: u64) -> Result<()> {
+        self.inner()
+            .await
+            .auth_entries
+            .entry(user_id)
+            .or_default()
+            .token = None;
 
         Ok(())
     }
 
     async fn get_token(&self, user_id: u64) -> Result<Option<String>> {
         Ok(self
+            .inner()
+            .await
             .auth_entries
             .get(&user_id)
             .and_then(|x| x.token.clone()))

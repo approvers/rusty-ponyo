@@ -1,10 +1,7 @@
 use {
-    crate::{
-        bot::{
-            genkai_point::{model::Session, GenkaiPointDatabase},
-            Context,
-        },
-        Synced,
+    crate::bot::{
+        genkai_point::{model::Session, GenkaiPointDatabase},
+        Context,
     },
     anyhow::{Context as _, Result},
     chrono::{Date, DateTime, Duration, Utc},
@@ -23,13 +20,13 @@ pub(super) trait Plotter {
 }
 
 pub(super) async fn plot<P: Plotter + Send>(
-    db: &Synced<impl GenkaiPointDatabase>,
+    db: &impl GenkaiPointDatabase,
     ctx: &dyn Context,
     plotter: P,
     top: usize,
 ) -> Result<Option<Vec<u8>>> {
     let all_sessions = {
-        let sess = db.read().await.get_all_sessions().await?;
+        let sess = db.get_all_sessions().await?;
 
         if sess.is_empty() {
             return Ok(None);
