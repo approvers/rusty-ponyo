@@ -1,26 +1,23 @@
 use {
-    crate::{
-        bot::{
-            alias::{
-                model::{MessageAlias, MessageAliasAttachment},
-                MessageAliasDatabase,
-            },
-            Attachment,
+    crate::bot::{
+        alias::{
+            model::{MessageAlias, MessageAliasAttachment},
+            MessageAliasDatabase,
         },
-        Synced,
+        Attachment,
     },
     anyhow::{Context as _, Result},
     chrono::Utc,
 };
 
-pub(super) async fn status(db: &Synced<impl MessageAliasDatabase>) -> Result<String> {
-    let len = db.read().await.len().await?;
+pub(super) async fn status(db: &impl MessageAliasDatabase) -> Result<String> {
+    let len = db.len().await?;
     Ok(format!("```\n現在登録されているエイリアス数: {}\n```", len))
 }
 
-pub(super) async fn usage_ranking(db: &Synced<impl MessageAliasDatabase>) -> Result<String> {
+pub(super) async fn usage_ranking(db: &impl MessageAliasDatabase) -> Result<String> {
     const SHOW_COUNT: usize = 20;
-    let ranking = db.read().await.usage_count_top_n(SHOW_COUNT).await?;
+    let ranking = db.usage_count_top_n(SHOW_COUNT).await?;
 
     let mut result = vec!["```".into()];
     for (i, r) in ranking.into_iter().enumerate() {
@@ -43,7 +40,7 @@ const ATTACHMENTS_MAX_COUNT: usize = 1;
 const MAX_FILE_SIZE: usize = 1024 * 512;
 
 pub(super) async fn make(
-    db: &Synced<impl MessageAliasDatabase>,
+    db: &impl MessageAliasDatabase,
     key: &str,
     msg: Option<&str>,
     attachments: &[&dyn Attachment],
@@ -51,7 +48,7 @@ pub(super) async fn make(
     let key = key.trim();
     let msg = msg.unwrap_or("").trim();
 
-    if db.read().await.get(key).await?.is_some() {
+    if db.get(key).await?.is_some() {
         return Ok("すでにそのキーにはエイリアスが登録されています。上書きしたい場合は先に削除してください。".to_string());
     }
 
@@ -123,22 +120,13 @@ pub(super) async fn make(
         usage_count: 0,
     };
 
-    db.write()
-        .await
-        .save(entry)
-        .await
-        .context("failed to save new alias")?;
+    db.save(entry).await.context("failed to save new alias")?;
 
     Ok("作成しました".into())
 }
 
-pub(super) async fn delete(db: &Synced<impl MessageAliasDatabase>, key: &str) -> Result<String> {
-    let deleted = db
-        .write()
-        .await
-        .delete(key)
-        .await
-        .context("failed to delete alias")?;
+pub(super) async fn delete(db: &impl MessageAliasDatabase, key: &str) -> Result<String> {
+    let deleted = db.delete(key).await.context("failed to delete alias")?;
 
     if deleted {
         Ok("削除しました".into())

@@ -7,8 +7,6 @@ mod db;
 use {
     crate::bot::{alias::MessageAliasBot, auth::GenkaiAuthBot, genkai_point::GenkaiPointBot},
     anyhow::{Context as _, Result},
-    std::sync::Arc,
-    tokio::sync::RwLock,
 };
 
 #[rustfmt::skip]
@@ -24,11 +22,6 @@ compile_error!("You must enable discord_client or console_client feature.");
 #[cfg(not(any(feature = "mongo_db", feature = "memory_db")))]
 compile_error!("You must enable mongo_db or memory_db feature.");
 
-type Synced<T> = Arc<RwLock<T>>;
-
-trait ThreadSafe: Send + Sync {}
-impl<T> ThreadSafe for T where T: Send + Sync {}
-
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenv::dotenv().ok();
@@ -38,18 +31,14 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt().with_ansi(use_ansi).init();
 
     #[cfg(feature = "memory_db")]
-    let db = Arc::new(RwLock::new(crate::db::mem::MemoryDB::new()));
+    let db = crate::db::mem::MemoryDB::new();
     #[cfg(feature = "memory_db")]
-    let auth_db = Arc::clone(&db);
+    let auth_db = db.clone();
 
     #[cfg(feature = "mongo_db")]
-    let db = Arc::new(RwLock::new(
-        crate::db::mongodb::MongoDb::new(&env_var("MONGODB_URI")?).await?,
-    ));
+    let db = crate::db::mongodb::MongoDb::new(&env_var("MONGODB_URI")?).await?;
     #[cfg(feature = "mongo_db")]
-    let auth_db = Arc::new(RwLock::new(
-        crate::db::mongodb::MongoDb::new(&env_var("MONGO_AUTH_DB_URI")?).await?,
-    ));
+    let auth_db = crate::db::mongodb::MongoDb::new(&env_var("MONGO_AUTH_DB_URI")?).await?;
 
     #[cfg(feature = "console_client")]
     let mut client = crate::client::console::ConsoleClient::new();
@@ -62,9 +51,9 @@ async fn main() -> Result<()> {
         .collect();
 
     client
-        .add_service(MessageAliasBot::new(), Arc::clone(&db))
-        .add_service(GenkaiPointBot::new(), Arc::clone(&db))
-        .add_service(GenkaiAuthBot::new(pgp_whitelist), Arc::clone(&auth_db));
+        .add_service(MessageAliasBot::new(db.clone()))
+        .add_service(GenkaiPointBot::new(db.clone()))
+        .add_service(GenkaiAuthBot::new(auth_db, pgp_whitelist));
 
     #[cfg(feature = "console_client")]
     client.run().await?;

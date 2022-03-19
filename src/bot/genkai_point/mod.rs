@@ -2,19 +2,16 @@ pub(crate) mod model;
 mod plot;
 
 use {
-    crate::{
-        bot::{
-            genkai_point::model::{Session, UserStat},
-            BotService, Context, Message, SendAttachment, SendMessage,
-        },
-        Synced, ThreadSafe,
+    crate::bot::{
+        genkai_point::model::{Session, UserStat},
+        BotService, Context, Message, SendAttachment, SendMessage,
     },
     anyhow::{Context as _, Result},
     async_trait::async_trait,
     chrono::{DateTime, Duration, Utc},
     clap::{ArgEnum, Args, CommandFactory, Parser},
     once_cell::sync::Lazy,
-    std::{cmp::Ordering, collections::HashMap, fmt::Write, marker::PhantomData},
+    std::{cmp::Ordering, collections::HashMap, fmt::Write},
     tokio::sync::Mutex,
 };
 
@@ -81,17 +78,17 @@ enum RankingBy {
 }
 
 #[async_trait]
-pub(crate) trait GenkaiPointDatabase: ThreadSafe {
+pub(crate) trait GenkaiPointDatabase: Send + Sync {
     /// Creates a new unclosed session if not exists.
     /// If the user's last session was closed before within 5minutes from now, clear its "left_at" field.
     /// If an unclosed session exists, leaves it untouched.
     async fn create_new_session(
-        &mut self,
+        &self,
         user_id: u64,
         joined_at: DateTime<Utc>,
     ) -> Result<CreateNewSessionResult>;
     async fn unclosed_session_exists(&self, user_id: u64) -> Result<bool>;
-    async fn close_session(&mut self, user_id: u64, left_at: DateTime<Utc>) -> Result<()>;
+    async fn close_session(&self, user_id: u64, left_at: DateTime<Utc>) -> Result<()>;
     async fn get_users_all_sessions(&self, user_id: u64) -> Result<Vec<Session>>;
     async fn get_all_users_who_has_unclosed_session(&self) -> Result<Vec<u64>>;
     async fn get_all_sessions(&self) -> Result<Vec<Session>>;
@@ -125,34 +122,27 @@ pub(crate) enum CreateNewSessionResult {
 }
 
 pub(crate) struct GenkaiPointBot<D> {
+    db: D,
     resume_msg_timeout: Mutex<DateTime<Utc>>,
-    phantom: PhantomData<fn() -> D>,
 }
 
 // chrono::Duration::seconds is not const fn yet.
 static RESUME_MSG_TIMEOUT: Lazy<Duration> = Lazy::new(|| Duration::seconds(10));
 
 impl<D: GenkaiPointDatabase> GenkaiPointBot<D> {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(db: D) -> Self {
         Self {
+            db,
             resume_msg_timeout: Mutex::new(Utc::now()),
-            phantom: PhantomData,
         }
     }
 
-    async fn ranking<C>(
-        &self,
-        db: &Synced<D>,
-        ctx: &dyn Context,
-        by: &str,
-        comparator: C,
-    ) -> Result<()>
+    async fn ranking<C>(&self, ctx: &dyn Context, by: &str, comparator: C) -> Result<()>
     where
         C: Fn(&UserStat, &UserStat) -> Ordering,
     {
-        let mut ranking = db
-            .read()
-            .await
+        let mut ranking = self
+            .db
             .get_all_users_stats()
             .await
             .context("failed to fetch ranking")?;
@@ -193,12 +183,7 @@ impl<D: GenkaiPointDatabase> GenkaiPointBot<D> {
         Ok(())
     }
 
-    async fn graph(
-        &self,
-        db: &Synced<impl GenkaiPointDatabase>,
-        ctx: &dyn Context,
-        n: u8,
-    ) -> Result<()> {
+    async fn graph(&self, ctx: &dyn Context, n: u8) -> Result<()> {
         let n = n.clamp(1, 11);
 
         #[cfg(feature = "plot_plotters")]
@@ -215,7 +200,7 @@ impl<D: GenkaiPointDatabase> GenkaiPointBot<D> {
         #[cfg(not(any(feature = "plot_plotters", feature = "plot_matplotlib")))]
         compile_error!("You must enable discord_client or console_client feature.");
 
-        let image = plot::plot(db, ctx, plotter, n as _).await?;
+        let image = plot::plot(&self.db, ctx, plotter, n as _).await?;
 
         match image {
             Some(image) => {
@@ -237,7 +222,7 @@ impl<D: GenkaiPointDatabase> GenkaiPointBot<D> {
         .context("failed to send message")
     }
 
-    async fn show(&self, db: &Synced<D>, ctx: &dyn Context, user_id: u64) -> Result<()> {
+    async fn show(&self, ctx: &dyn Context, user_id: u64) -> Result<()> {
         let username = match ctx.get_user_name(user_id).await {
             Ok(n) => n,
             Err(_) => {
@@ -248,9 +233,8 @@ impl<D: GenkaiPointDatabase> GenkaiPointBot<D> {
             }
         };
 
-        let sessions = db
-            .read()
-            .await
+        let sessions = self
+            .db
             .get_users_all_sessions(user_id)
             .await
             .context("failed to get sessions")?;
@@ -301,15 +285,11 @@ where
 
 #[async_trait]
 impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
-    const NAME: &'static str = NAME;
-    type Database = D;
+    fn name(&self) -> &'static str {
+        NAME
+    }
 
-    async fn on_message(
-        &self,
-        db: &Synced<Self::Database>,
-        msg: &dyn Message,
-        ctx: &dyn Context,
-    ) -> Result<()> {
+    async fn on_message(&self, msg: &dyn Message, ctx: &dyn Context) -> Result<()> {
         if !msg.content().starts_with(PREFIX) {
             return Ok(());
         }
@@ -333,12 +313,12 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
             Command::Help => {}
 
             Command::Show { user_id } => {
-                self.show(db, ctx, user_id.unwrap_or_else(|| msg.author().id()))
+                self.show(ctx, user_id.unwrap_or_else(|| msg.author().id()))
                     .await?;
             }
 
             Command::Graph { n } => {
-                self.graph(db, ctx, n).await?;
+                self.graph(ctx, n).await?;
             }
 
             #[rustfmt::skip]
@@ -348,19 +328,19 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
             } => {
                 match by {
                     RankingBy::Point => {
-                        self.ranking(db, ctx,
+                        self.ranking(ctx,
                             "genkai point",
                             comparator(|x| x.genkai_point, invert),
                         ).await
                     }
                     RankingBy::Duration => {
-                        self.ranking(db, ctx,
+                        self.ranking(ctx,
                             "total vc duration",
                             comparator(|x| x.total_vc_duration, invert),
                         ).await
                     }
                     RankingBy::Efficiency => {
-                        self.ranking(db, ctx,
+                        self.ranking(ctx,
                             "genkai efficiency",
                             comparator(|x| x.efficiency, invert),
                         ).await
@@ -372,15 +352,9 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
         Ok(())
     }
 
-    async fn on_vc_join(
-        &self,
-        db: &Synced<Self::Database>,
-        ctx: &dyn Context,
-        user_id: u64,
-    ) -> Result<()> {
-        let op = db
-            .write()
-            .await
+    async fn on_vc_join(&self, ctx: &dyn Context, user_id: u64) -> Result<()> {
+        let op = self
+            .db
             .create_new_session(user_id, Utc::now())
             .await
             .context("failed to create new session")?;
@@ -403,21 +377,14 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
         Ok(())
     }
 
-    async fn on_vc_leave(
-        &self,
-        db: &Synced<Self::Database>,
-        ctx: &dyn Context,
-        user_id: u64,
-    ) -> Result<()> {
-        db.write()
-            .await
+    async fn on_vc_leave(&self, ctx: &dyn Context, user_id: u64) -> Result<()> {
+        self.db
             .close_session(user_id, Utc::now())
             .await
             .context("failed to close session")?;
 
-        let mut sessions = db
-            .read()
-            .await
+        let mut sessions = self
+            .db
             .get_users_all_sessions(user_id)
             .await
             .context("failed to get all closed sessions")?;
@@ -430,7 +397,7 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
         if this_time_point > 0 {
             let stat = UserStat::from_sessions(&sessions)
                 .expect("`sessions` contains multiple user's session")
-                .expect("sessions have 1 elements at least");
+                .expect("sessions must have 1 elements at least");
 
             let to_hours = |d: Duration| d.num_minutes() as f64 / 60.0;
 
@@ -455,14 +422,12 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
 
     async fn on_vc_data_available(
         &self,
-        db: &Synced<Self::Database>,
         _ctx: &dyn Context,
         joined_user_ids: &[u64],
     ) -> Result<()> {
         for uid in joined_user_ids {
-            let op = db
-                .write()
-                .await
+            let op = self
+                .db
                 .create_new_session(*uid, Utc::now())
                 .await
                 .context("failed to create new session")?;
@@ -480,9 +445,8 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
             }
         }
 
-        let db_state = db
-            .read()
-            .await
+        let db_state = self
+            .db
             .get_all_users_who_has_unclosed_session()
             .await
             .context("failed to get users who has unclosed session")?;
@@ -492,8 +456,7 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
                 continue;
             }
 
-            db.write()
-                .await
+            self.db
                 .close_session(uid, Utc::now())
                 .await
                 .context("failed to close session")?;
