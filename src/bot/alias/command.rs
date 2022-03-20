@@ -44,18 +44,11 @@ pub(super) async fn make(
     key: &str,
     msg: Option<&str>,
     attachments: &[&dyn Attachment],
+    force: bool,
 ) -> Result<String> {
     let key = key.trim();
     let msg = msg.unwrap_or("").trim();
-
-    if db.get(key).await?.is_some() {
-        return Ok("すでにそのキーにはエイリアスが登録されています。上書きしたい場合は先に削除してください。".to_string());
-    }
-
     let mut error_msgs = vec![];
-
-    let key_len = key.chars().count();
-    let msg_len = msg.chars().count();
 
     if key.is_empty() {
         error_msgs.push("キーが空白です。".to_string());
@@ -84,6 +77,9 @@ pub(super) async fn make(
         }
     }
 
+    let key_len = key.chars().count();
+    let msg_len = msg.chars().count();
+
     if key_len > KEY_LENGTH_LIMIT {
         error_msgs.push(format!(
             "長すぎるキー({}文字)です。{}文字以下にしてください。",
@@ -100,6 +96,17 @@ pub(super) async fn make(
 
     if !error_msgs.is_empty() {
         return Ok(error_msgs.join("\n"));
+    }
+
+    let mut force_applied = false;
+
+    if db.get(key).await?.is_some() {
+        if !force {
+            return Ok("すでにそのキーにはエイリアスが登録されています。上書きしたい場合は先に削除してください。".to_string());
+        }
+
+        db.delete(key).await?;
+        force_applied = true;
     }
 
     // we cannot use iter().map() because download method is async function.
@@ -122,7 +129,11 @@ pub(super) async fn make(
 
     db.save(entry).await.context("failed to save new alias")?;
 
-    Ok("作成しました".into())
+    Ok(if force_applied {
+        "既存のエイリアスを削除し、作成しました"
+    } else {
+        "作成しました"
+    }.into())
 }
 
 pub(super) async fn delete(db: &impl MessageAliasDatabase, key: &str) -> Result<String> {

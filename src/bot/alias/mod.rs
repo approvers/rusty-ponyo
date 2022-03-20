@@ -60,6 +60,10 @@ enum Command {
 
         /// 送信するメッセージ
         message: Option<String>,
+
+        /// 既存のエイリアスがあったとき、上書きします
+        #[clap(short, long)]
+        force: bool,
     },
 }
 
@@ -140,11 +144,19 @@ impl<D: MessageAliasDatabase> MessageAliasBot<D> {
 
             Command::Delete { key } => delete(&self.db, &key).await.map(Some),
 
-            Command::Make { key, message: text } => {
-                make(&self.db, &key, text.as_deref(), message.attachments())
-                    .await
-                    .map(Some)
-            }
+            Command::Make {
+                key,
+                message: text,
+                force,
+            } => make(
+                &self.db,
+                &key,
+                text.as_deref(),
+                message.attachments(),
+                force,
+            )
+            .await
+            .map(Some),
         }
     }
 }
