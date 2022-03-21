@@ -109,7 +109,7 @@ impl EvHandler {
         }
     }
 
-    async fn hoge(inner: Arc<EvHandlerInner>, ctx: SerenityContext) {
+    async fn initial_validate_vc_cache(inner: Arc<EvHandlerInner>, ctx: SerenityContext) {
         let mut interval = interval(Duration::from_secs(1));
 
         loop {
@@ -222,7 +222,7 @@ impl EventHandler for EvHandler {
         tracing::info!("DiscordBot({}) is connected!", ready.user.name);
 
         let inner = Arc::clone(&self.inner);
-        tokio::spawn(Self::hoge(inner, ctx));
+        tokio::spawn(Self::initial_validate_vc_cache(inner, ctx));
     }
 
     async fn voice_state_update(
