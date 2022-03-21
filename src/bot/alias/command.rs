@@ -102,7 +102,7 @@ pub(super) async fn make(
 
     if db.get(key).await?.is_some() {
         if !force {
-            return Ok("すでにそのキーにはエイリアスが登録されています。上書きしたい場合は先に削除してください。".to_string());
+            return Ok("すでにそのキーにはエイリアスが登録されています。上書きしたい場合は先に削除するか、`-f` オプションを使用することで強制的に上書き登録できます。".to_string());
         }
 
         db.delete(key).await?;
@@ -130,7 +130,7 @@ pub(super) async fn make(
     db.save(entry).await.context("failed to save new alias")?;
 
     Ok(if force_applied {
-        "既存のエイリアスを削除し、作成しました"
+        "既存のエイリアスを削除し、強制的に作成しました"
     } else {
         "作成しました"
     }.into())
