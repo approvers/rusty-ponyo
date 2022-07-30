@@ -42,11 +42,11 @@ shellwords = "1"
 
 inline-python = { version = "0.8", optional = true }
 plotters = { version = "0.3", optional = true }
-ordered-float = { version = "2.10", optional = true }
+ordered-float = { version = "3", optional = true }
 png = { version = "0.17", optional = true }
 
 [dependencies.serenity]
-version = "0.10"
+version = "0.11"
 optional = true
 default-features = false
 features = ["rustls_backend", "client", "gateway", "model", "cache"]

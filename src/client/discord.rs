@@ -1,9 +1,10 @@
+use serenity::{prelude::GatewayIntents, model::channel::AttachmentType};
+
 use {
     crate::bot::{Attachment, BotService, Context, Message, SendMessage, User},
     anyhow::{Context as _, Result},
     async_trait::async_trait,
     serenity::{
-        http::AttachmentType,
         model::{
             channel::{Attachment as SerenityAttachment, Message as SerenityMessage},
             gateway::Ready,
@@ -43,7 +44,7 @@ impl DiscordClient {
     pub async fn run(self, token: &str) -> Result<()> {
         let event_handler = EvHandler::new(self.services);
 
-        Client::builder(token)
+        Client::builder(token, GatewayIntents::all())
             .event_handler(event_handler)
             .await
             .context("Failed to create Discord client")?
@@ -115,7 +116,7 @@ impl EvHandler {
         loop {
             interval.tick().await;
 
-            let guild = match ctx.cache.guild(APPROVERS_GUILD_ID).await {
+            let guild = match ctx.cache.guild(APPROVERS_GUILD_ID) {
                 Some(g) => g,
                 None => continue,
             };
@@ -161,7 +162,7 @@ impl EvHandler {
         loop {
             interval.tick().await;
 
-            let guild = match ctx.cache.guild(APPROVERS_GUILD_ID).await {
+            let guild = match ctx.cache.guild(APPROVERS_GUILD_ID) {
                 Some(g) => g,
                 None => {
                     tracing::warn!("missing guild in validate_vc_cache_loop. This is not good sign because mismatch of inner.vc_state can occur.");
@@ -228,10 +229,10 @@ impl EventHandler for EvHandler {
     async fn voice_state_update(
         &self,
         ctx: SerenityContext,
-        gid: Option<SerenityGuildId>,
         _: Option<VoiceState>,
         state: VoiceState,
     ) {
+        let gid = state.guild_id;
         let is_approvers_event = gid.map(|x| x == APPROVERS_GUILD_ID).unwrap_or(false);
         if !is_approvers_event {
             return;
@@ -435,7 +436,8 @@ impl Context for DiscordContext<'_> {
         let files = msg
             .attachments
             .iter()
-            .map(|x| AttachmentType::Bytes {
+            .map(|x| 
+                AttachmentType::Bytes {
                 data: x.data.into(),
                 filename: x.name.to_string(),
             })
