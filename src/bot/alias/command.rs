@@ -133,7 +133,8 @@ pub(super) async fn make(
         "既存のエイリアスを削除し、強制的に作成しました"
     } else {
         "作成しました"
-    }.into())
+    }
+    .into())
 }
 
 pub(super) async fn delete(db: &impl MessageAliasDatabase, key: &str) -> Result<String> {

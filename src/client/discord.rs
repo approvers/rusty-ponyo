@@ -1,4 +1,4 @@
-use serenity::{prelude::GatewayIntents, model::channel::AttachmentType};
+use serenity::{model::channel::AttachmentType, prelude::GatewayIntents};
 
 use {
     crate::bot::{Attachment, BotService, Context, Message, SendMessage, User},
@@ -9,7 +9,7 @@ use {
             channel::{Attachment as SerenityAttachment, Message as SerenityMessage},
             gateway::Ready,
             id::{
-                ChannelId as SerenityChannelId, GuildId as SerenityGuildId,
+                ChannelId as SerenityChannelId,
                 UserId as SerenityUserId,
             },
             voice::VoiceState,
@@ -140,7 +140,6 @@ impl EvHandler {
             let converted_ctx = DiscordContext::from_serenity(
                 &ctx,
                 APPROVERS_DEFAULT_CHANNEL_ID,
-                Some(APPROVERS_GUILD_ID),
                 &inner.nickname_cache,
             );
 
@@ -173,7 +172,6 @@ impl EvHandler {
             let converted_ctx = DiscordContext::from_serenity(
                 &ctx,
                 APPROVERS_DEFAULT_CHANNEL_ID,
-                Some(APPROVERS_GUILD_ID),
                 &inner.nickname_cache,
             );
 
@@ -248,7 +246,6 @@ impl EventHandler for EvHandler {
         let converted_ctx = DiscordContext::from_serenity(
             &ctx,
             APPROVERS_DEFAULT_CHANNEL_ID,
-            gid,
             &self.inner.nickname_cache,
         );
 
@@ -313,12 +310,8 @@ impl EventHandler for EvHandler {
             },
         };
 
-        let converted_context = DiscordContext::from_serenity(
-            &ctx,
-            message.channel_id,
-            message.guild_id,
-            &self.inner.nickname_cache,
-        );
+        let converted_context =
+            DiscordContext::from_serenity(&ctx, message.channel_id, &self.inner.nickname_cache);
 
         Self::do_for_each_service(&ctx, &self.inner, "on_message", |s| {
             s.on_message(&converted_message, &converted_context)
@@ -410,7 +403,6 @@ impl Attachment for DiscordAttachment<'_> {
 struct DiscordContext<'a> {
     origin: &'a SerenityContext,
     channel_id: SerenityChannelId,
-    guild_id: Option<SerenityGuildId>,
     nickname_cache: &'a RwLock<NicknameCache>,
 }
 
@@ -418,13 +410,11 @@ impl<'a> DiscordContext<'a> {
     fn from_serenity(
         origin: &'a SerenityContext,
         channel_id: impl Into<SerenityChannelId>,
-        guild_id: Option<impl Into<SerenityGuildId>>,
         nickname_cache: &'a RwLock<NicknameCache>,
     ) -> Self {
         Self {
             origin,
             channel_id: channel_id.into(),
-            guild_id: guild_id.map(|x| x.into()),
             nickname_cache,
         }
     }
@@ -436,8 +426,7 @@ impl Context for DiscordContext<'_> {
         let files = msg
             .attachments
             .iter()
-            .map(|x| 
-                AttachmentType::Bytes {
+            .map(|x| AttachmentType::Bytes {
                 data: x.data.into(),
                 filename: x.name.to_string(),
             })
