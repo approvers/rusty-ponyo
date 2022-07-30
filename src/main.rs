@@ -5,7 +5,7 @@ mod client;
 mod db;
 
 use {
-    crate::bot::{alias::MessageAliasBot, auth::GenkaiAuthBot, genkai_point::GenkaiPointBot},
+    crate::bot::{alias::MessageAliasBot, auth::GenkaiAuthBot, genkai_point::GenkaiPointBot, gh::GitHubCodePreviewBot},
     anyhow::{Context as _, Result},
 };
 
@@ -53,6 +53,7 @@ async fn main() -> Result<()> {
     client
         .add_service(MessageAliasBot::new(db.clone()))
         .add_service(GenkaiPointBot::new(db.clone()))
+        .add_service(GitHubCodePreviewBot)
         .add_service(GenkaiAuthBot::new(auth_db, pgp_whitelist));
 
     #[cfg(feature = "console_client")]

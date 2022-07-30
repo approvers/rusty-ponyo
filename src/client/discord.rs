@@ -8,10 +8,7 @@ use {
         model::{
             channel::{Attachment as SerenityAttachment, Message as SerenityMessage},
             gateway::Ready,
-            id::{
-                ChannelId as SerenityChannelId,
-                UserId as SerenityUserId,
-            },
+            id::{ChannelId as SerenityChannelId, UserId as SerenityUserId},
             voice::VoiceState,
         },
         prelude::{Client, Context as SerenityContext, EventHandler},

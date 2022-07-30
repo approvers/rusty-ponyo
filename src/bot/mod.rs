@@ -3,6 +3,7 @@ use {anyhow::Result, async_trait::async_trait, std::future::Future, std::pin::Pi
 pub mod alias;
 pub mod auth;
 pub mod genkai_point;
+pub mod gh;
 
 pub(crate) trait Message: Send + Sync {
     fn author(&self) -> &dyn User;
