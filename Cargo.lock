@@ -59,16 +59,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-hofs"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c38b259e145ec72412cda6646eca167e3baf014ff9fdeb2dd8e6370456bb2f8"
-dependencies = [
- "futures-core",
- "pin-project",
-]
-
-[[package]]
 name = "async-trait"
 version = "0.1.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1678,26 +1668,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pin-project"
-version = "1.0.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78203e83c48cffbe01e4a2d35d566ca4de445d79a85372fc64e378bfc812a260"
-dependencies = [
- "pin-project-internal",
-]
-
-[[package]]
-name = "pin-project-internal"
-version = "1.0.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "710faf75e1b33345361201d36d04e98ac1ed8909151a017ed384700836104c74"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "pin-project-lite"
 version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2124,11 +2094,11 @@ name = "rusty-ponyo"
 version = "0.7.0"
 dependencies = [
  "anyhow",
- "async-hofs",
  "async-trait",
  "chrono",
  "chrono-tz",
  "clap",
+ "derivative",
  "dotenv",
  "hex",
  "inline-python",
