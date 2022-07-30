@@ -60,7 +60,7 @@ features = ["rustls-tls"]
 
 [dependencies.tokio]
 version = "1"
-features = ["rt-multi-thread", "parking_lot", "fs", "macros"]
+features = ["rt-multi-thread", "parking_lot", "fs", "macros", "signal"]
 
 [dependencies.mongodb]
 version = "2"

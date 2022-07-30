@@ -25,6 +25,15 @@ use {
     },
 };
 
+fn submit_signal_handler(client: &Client, waiter: impl Future + Send + 'static) {
+    let shard_manager = client.shard_manager.clone();
+
+    tokio::spawn(async move {
+        waiter.await;
+        shard_manager.lock().await.shutdown_all().await;
+    });
+}
+
 pub(crate) struct DiscordClient {
     services: Vec<Box<dyn BotService>>,
 }
@@ -45,10 +54,27 @@ impl DiscordClient {
     pub async fn run(self, token: &str) -> Result<()> {
         let event_handler = EvHandler::new(self.services);
 
-        Client::builder(token, GatewayIntents::all())
+        let mut client = Client::builder(token, GatewayIntents::all())
             .event_handler(event_handler)
             .await
-            .context("Failed to create Discord client")?
+            .context("Failed to create Discord client")?;
+
+        submit_signal_handler(&client, async {
+            tokio::signal::ctrl_c()
+                .await
+                .expect("could not register ctrl+c handler");
+        });
+
+        #[cfg(unix)]
+        submit_signal_handler(&client, async {
+            use tokio::signal::unix::{signal, SignalKind};
+            signal(SignalKind::terminate())
+                .expect("could not register SIGTERM handler")
+                .recv()
+                .await;
+        });
+
+        client
             .start()
             .await
             .context("Failed to start Discord client")
