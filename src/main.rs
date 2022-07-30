@@ -5,7 +5,10 @@ mod client;
 mod db;
 
 use {
-    crate::bot::{alias::MessageAliasBot, auth::GenkaiAuthBot, genkai_point::GenkaiPointBot, gh::GitHubCodePreviewBot},
+    crate::bot::{
+        alias::MessageAliasBot, auth::GenkaiAuthBot, genkai_point::GenkaiPointBot,
+        gh::GitHubCodePreviewBot,
+    },
     anyhow::{Context as _, Result},
 };
 

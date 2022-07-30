@@ -1,11 +1,13 @@
-use crate::bot::{BotService, Context, Message};
-use anyhow::{Context as _, Result};
-use async_hofs::prelude::*;
-use async_trait::async_trait;
-use once_cell::sync::Lazy;
-use regex::Regex;
-use std::{fmt::Write, path::Path};
-use url::Url;
+use {
+    crate::bot::{BotService, Context, Message},
+    anyhow::{Context as _, Result},
+    async_hofs::prelude::*,
+    async_trait::async_trait,
+    once_cell::sync::Lazy,
+    regex::Regex,
+    std::{fmt::Write, path::Path},
+    url::Url,
+};
 
 pub struct GitHubCodePreviewBot;
 
@@ -141,12 +143,16 @@ impl CodePermalink {
 
 #[cfg(test)]
 mod test {
-    use std::{future::Future, pin::Pin, sync::atomic::{AtomicBool, Ordering}};
-
-    use crate::bot::{Attachment, SendMessage, User};
-
-    use super::*;
-    use pretty_assertions::assert_eq;
+    use {
+        super::*,
+        crate::bot::{Attachment, SendMessage, User},
+        pretty_assertions::assert_eq,
+        std::{
+            future::Future,
+            pin::Pin,
+            sync::atomic::{AtomicBool, Ordering},
+        },
+    };
 
     struct Msg;
     impl Message for Msg {
@@ -162,17 +168,26 @@ mod test {
     }
 
     struct Ctx {
-        called: AtomicBool
+        called: AtomicBool,
     }
 
     #[async_trait]
     impl Context for Ctx {
-        async fn send_message(&self, _: SendMessage<'_>) -> Result<()> { unimplemented!() }
+        async fn send_message(&self, _: SendMessage<'_>) -> Result<()> {
+            unimplemented!()
+        }
 
-        async fn get_user_name(&self, _: u64) -> Result<String> { unimplemented!() }
+        async fn get_user_name(&self, _: u64) -> Result<String> {
+            unimplemented!()
+        }
 
-        fn send_text_message<'a>( &'a self, text: &'a str) -> Pin<Box<dyn Send + Future<Output = Result<()>> + 'a>> {
-            assert_eq!(text, r#"approvers/rusty-ponyo [02bb011de7d06e242a275dd9a9126a21effc6854] : Cargo.toml
+        fn send_text_message<'a>(
+            &'a self,
+            text: &'a str,
+        ) -> Pin<Box<dyn Send + Future<Output = Result<()>> + 'a>> {
+            assert_eq!(
+                text,
+                r#"approvers/rusty-ponyo [02bb011de7d06e242a275dd9a9126a21effc6854] : Cargo.toml
 ```toml
 version = "0.10"
 optional = true
@@ -194,16 +209,19 @@ features = ["rustls-tls"]
 
 [dependencies.tokio]
 version = "1"
-```"#);
+```"#
+            );
 
             self.called.store(true, Ordering::Relaxed);
-            Box::pin(async {Ok(())})
+            Box::pin(async { Ok(()) })
         }
     }
 
     #[tokio::test]
     async fn test_get_code() {
-        let ctx = Ctx { called: AtomicBool::new(false) };
+        let ctx = Ctx {
+            called: AtomicBool::new(false),
+        };
 
         GitHubCodePreviewBot.on_message(&Msg, &ctx).await.unwrap();
 

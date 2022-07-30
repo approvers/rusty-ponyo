@@ -1,4 +1,8 @@
-use {anyhow::Result, async_trait::async_trait, std::future::Future, std::pin::Pin};
+use {
+    anyhow::Result,
+    async_trait::async_trait,
+    std::{future::Future, pin::Pin},
+};
 
 pub mod alias;
 pub mod auth;

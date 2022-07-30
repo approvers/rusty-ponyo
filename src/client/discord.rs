@@ -1,20 +1,24 @@
-use serenity::{model::channel::AttachmentType, prelude::GatewayIntents};
-
 use {
     crate::bot::{Attachment, BotService, Context, Message, SendMessage, User},
     anyhow::{Context as _, Result},
     async_trait::async_trait,
     serenity::{
         model::{
-            channel::{Attachment as SerenityAttachment, Message as SerenityMessage},
+            channel::{
+                Attachment as SerenityAttachment, AttachmentType, Message as SerenityMessage,
+            },
             gateway::Ready,
             id::{ChannelId as SerenityChannelId, UserId as SerenityUserId},
             voice::VoiceState,
         },
-        prelude::{Client, Context as SerenityContext, EventHandler},
+        prelude::{Client, Context as SerenityContext, EventHandler, GatewayIntents},
     },
-    std::collections::{HashMap, HashSet},
-    std::{future::Future, sync::Arc, time::Duration},
+    std::{
+        collections::{HashMap, HashSet},
+        future::Future,
+        sync::Arc,
+        time::Duration,
+    },
     tokio::{
         sync::{Mutex, RwLock},
         time::interval,
