@@ -18,7 +18,7 @@ use {
 const NAME: &str = "rusty_ponyo::bot::genkai_point";
 const PREFIX: &str = "g!point";
 
-/// 特定のメッセージが送信されたときに、指定されたメッセージを同じ場所に送信します。
+/// VCに入っている時間帯から、そのユーザーの限界さを計算しポイント化します
 #[derive(Debug, clap::Args)]
 #[clap(name=NAME, about, long_about=None)]
 struct Ui {
