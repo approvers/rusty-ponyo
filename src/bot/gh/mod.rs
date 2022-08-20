@@ -215,8 +215,13 @@ impl CodePermalink {
 
                 let fragment = url.fragment()?; // a part after #
                 let captures = LINE_REGEX.captures(fragment)?;
-                let l1 = captures.name("l1").unwrap().as_str().parse().unwrap();
-                let l2 = captures.name("l2").map(|x| x.as_str().parse().unwrap());
+
+                let l1 = captures.name("l1").unwrap().as_str().parse().ok()?;
+
+                let l2 = match captures.name("l2") {
+                    Some(l2) => Some(l2.as_str().parse().ok()?),
+                    None => None,
+                };
 
                 Some(Self {
                     user: user.to_owned(),
