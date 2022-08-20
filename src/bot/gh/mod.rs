@@ -255,7 +255,7 @@ impl CodePermalink {
 
         Ok(code
             .lines()
-            .skip(l1)
+            .skip(l1 - 1)
             .take(l2 - l1)
             .collect::<Vec<&str>>()
             .join("\n"))
