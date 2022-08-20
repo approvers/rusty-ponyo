@@ -215,8 +215,13 @@ impl CodePermalink {
 
                 let fragment = url.fragment()?; // a part after #
                 let captures = LINE_REGEX.captures(fragment)?;
-                let l1 = captures.name("l1").unwrap().as_str().parse().unwrap();
-                let l2 = captures.name("l2").map(|x| x.as_str().parse().unwrap());
+
+                let l1 = captures.name("l1").unwrap().as_str().parse().ok()?;
+
+                let l2 = match captures.name("l2") {
+                    Some(l2) => Some(l2.as_str().parse().ok()?),
+                    None => None,
+                };
 
                 Some(Self {
                     user: user.to_owned(),
@@ -246,17 +251,23 @@ impl CodePermalink {
             .await
             .context("failed to download rawcode")?;
 
-        const DEFAULT_RANGE: usize = 12;
+        const DEFAULT_SHOWN_LINES: usize = 12;
+        const OFFSET: usize = DEFAULT_SHOWN_LINES / 2;
 
         let (l1, l2) = match self.l2 {
             Some(l2) => (self.l1, l2),
-            None => (self.l1 - DEFAULT_RANGE / 2, self.l1 + DEFAULT_RANGE / 2),
+            None => (
+                self.l1.saturating_sub(OFFSET),
+                self.l1.saturating_add(OFFSET),
+            ),
         };
+
+        let skip = l1.saturating_sub(1);
 
         Ok(code
             .lines()
-            .skip(l1)
-            .take(l2 - l1)
+            .skip(skip)
+            .take(l2.saturating_sub(skip))
             .collect::<Vec<&str>>()
             .join("\n"))
     }
@@ -310,6 +321,7 @@ mod test {
                 text,
                 r#"approvers/rusty-ponyo [02bb011de7d06e242a275dd9a9126a21effc6854] : Cargo.toml
 ```toml
+[dependencies.serenity]
 version = "0.10"
 optional = true
 default-features = false
@@ -317,6 +329,7 @@ features = ["rustls_backend", "client", "gateway", "model", "cache"]
 ```
 approvers/rusty-ponyo [02bb011de7d06e242a275dd9a9126a21effc6854] : Cargo.toml
 ```toml
+[dependencies.serenity]
 version = "0.10"
 optional = true
 default-features = false
