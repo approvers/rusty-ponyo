@@ -1,4 +1,5 @@
 #![feature(let_else)]
+#![feature(let_chains)]
 
 mod bot;
 mod client;
