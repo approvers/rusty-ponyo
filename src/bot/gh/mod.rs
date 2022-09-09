@@ -127,8 +127,14 @@ impl GitHubCodePreviewBot {
                     }
             })?;
 
+            let replaced_backquote = code.contains("```");
+            let code = code.replace("```", "'''");
+
             macro_rules! w { ($($arg:tt)*) => { let _ = writeln!(msg, $($arg)*); } }
 
+            if replaced_backquote {
+                w!("\\`\\`\\` is replaced to '''");
+            }
             w!(
                 "{}/{} [{}] : {}",
                 link.user,
@@ -286,40 +292,70 @@ mod test {
         },
     };
 
-    struct Msg;
-    impl Message for Msg {
-        fn author(&self) -> &dyn User {
-            unimplemented!()
-        }
-        fn attachments(&self) -> &[&dyn Attachment] {
-            unimplemented!()
-        }
-        fn content(&self) -> &str {
-            r#"これはテストhttps://github.com/approvers/rusty-ponyo/blob/02bb011de7d06e242a275dd9a9126a21effc6854/Cargo.toml#L48-L52これもテストhttps://github.com/approvers/rusty-ponyo/blob/02bb011de7d06e242a275dd9a9126a21effc6854/Cargo.toml#L54"#
+    macro_rules! test {
+        (
+            $(fn $name:ident() {
+                input: $input:literal,
+                output: $output:literal,
+            })+
+        ) => {
+            $(#[tokio::test]
+            async fn $name() {
+                struct Msg;
+                impl Message for Msg {
+                    fn author(&self) -> &dyn User {
+                        unimplemented!()
+                    }
+                    fn attachments(&self) -> &[&dyn Attachment] {
+                        unimplemented!()
+                    }
+                    fn content(&self) -> &str {
+                        $input
+                    }
+                }
+
+                struct Ctx {
+                    called: AtomicBool,
+                }
+                #[async_trait]
+                impl Context for Ctx {
+                    async fn send_message(&self, _: SendMessage<'_>) -> Result<()> {
+                        unimplemented!()
+                    }
+
+                    async fn get_user_name(&self, _: u64) -> Result<String> {
+                        unimplemented!()
+                    }
+
+                    fn send_text_message<'a>(
+                        &'a self,
+                        text: &'a str,
+                    ) -> Pin<Box<dyn Send + Future<Output = Result<()>> + 'a>> {
+                        assert_eq!(
+                            text,
+                            $output
+                        );
+
+                        self.called.store(true, Ordering::Relaxed);
+                        Box::pin(async { Ok(()) })
+                    }
+                }
+
+                let ctx = Ctx { called: AtomicBool::new(false) };
+
+                GitHubCodePreviewBot.on_message(&Msg, &ctx).await.unwrap();
+
+                assert!(ctx.called.load(Ordering::Relaxed));
+            })+
         }
     }
 
-    struct Ctx {
-        called: AtomicBool,
-    }
+    test! {
+        fn test_get_code() {
+            input: r#"これはテストhttps://github.com/approvers/rusty-ponyo/blob/02bb011de7d06e242a275dd9a9126a21effc6854/Cargo.toml#L48-L52これもテストhttps://github.com/approvers/rusty-ponyo/blob/02bb011de7d06e242a275dd9a9126a21effc6854/Cargo.toml#L54"#,
 
-    #[async_trait]
-    impl Context for Ctx {
-        async fn send_message(&self, _: SendMessage<'_>) -> Result<()> {
-            unimplemented!()
-        }
-
-        async fn get_user_name(&self, _: u64) -> Result<String> {
-            unimplemented!()
-        }
-
-        fn send_text_message<'a>(
-            &'a self,
-            text: &'a str,
-        ) -> Pin<Box<dyn Send + Future<Output = Result<()>> + 'a>> {
-            assert_eq!(
-                text,
-                r#"approvers/rusty-ponyo [02bb011de7d06e242a275dd9a9126a21effc6854] : Cargo.toml
+            output:
+r#"approvers/rusty-ponyo [02bb011de7d06e242a275dd9a9126a21effc6854] : Cargo.toml
 ```toml
 [dependencies.serenity]
 version = "0.10"
@@ -343,22 +379,30 @@ features = ["rustls-tls"]
 [dependencies.tokio]
 version = "1"
 ```
-"#
-            );
-
-            self.called.store(true, Ordering::Relaxed);
-            Box::pin(async { Ok(()) })
+"#,
         }
-    }
 
-    #[tokio::test]
-    async fn test_get_code() {
-        let ctx = Ctx {
-            called: AtomicBool::new(false),
+        fn test_backquote() {
+            input: r#"https://github.com/approvers/rusty-ponyo/blob/5793b96bbdbb75b008a1a02a07f64081f4219242/src/bot/gh/mod.rs#L81"#,
+            output:
+r#"\`\`\` is replaced to '''
+approvers/rusty-ponyo [5793b96bbdbb75b008a1a02a07f64081f4219242] : src/bot/gh/mod.rs
+```rs
         };
 
-        GitHubCodePreviewBot.on_message(&Msg, &ctx).await.unwrap();
+        let parsed = match Ui::try_parse_from(words) {
+            Ok(p) => p,
+            Err(e) => {
+                return ctx
+                    .send_text_message(&format!("'''{e}'''"))
+                    .await
+                    .context("failed to send message")
+            }
+        };
 
-        assert!(ctx.called.load(Ordering::Relaxed));
+        match parsed.command {
+```
+"#,
+        }
     }
 }
