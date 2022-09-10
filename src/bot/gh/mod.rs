@@ -92,7 +92,7 @@ impl GitHubCodePreviewBot {
                 let preview_result = self.gen_preview(&url).await;
 
                 match preview_result {
-                    Ok(ref p) => ctx.send_text_message(&p).await,
+                    Ok(ref p) => ctx.send_text_message(p).await,
                     Err(ref e) => {
                         ctx.send_text_message(&format!("couldn't generate preview: ```{e:#?}```"))
                             .await
@@ -176,6 +176,7 @@ impl BotService for GitHubCodePreviewBot {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct CodePermalink {
     user: String,
     repo: String,
@@ -194,7 +195,7 @@ impl CodePermalink {
         static LINE_REGEX: Lazy<Regex> =
             Lazy::new(|| Regex::new(r#"L(?P<l1>\d+)(?:-L(?P<l2>\d+))?"#).unwrap());
 
-        URL_REGEX
+        let mut res = URL_REGEX
             .find_iter(msg)
             .flat_map(|m| {
                 // e.g.: https://github.com/approvers/rusty-ponyo/blob/02bb011de7d06e242a275dd9a9126a21effc6854/Cargo.toml#L48-L52
@@ -243,7 +244,11 @@ impl CodePermalink {
                     l2,
                 })
             })
-            .collect()
+            .collect::<Vec<_>>();
+
+        res.sort_unstable();
+        res.dedup();
+        res
     }
 
     async fn get_code(&self) -> Result<String> {
