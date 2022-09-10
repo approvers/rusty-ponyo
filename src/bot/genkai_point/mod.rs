@@ -244,7 +244,7 @@ impl<D: GenkaiPointDatabase> GenkaiPointBot<D> {
         let msg = match stat {
             Some(stat) => {
                 format!(
-                    "```\n{name}\n  - 限界ポイント: {points}\n  - 合計VC時間: {vc_hour:.2}h\n  - 限界効率: {efficiency:.2}%\n```",
+                    "```\n{name}\n  - 限界ポイント: {points}pt.\n  - 合計VC時間: {vc_hour:.2}h\n  - 限界効率: {efficiency:.2}%\n```",
                     name = username,
                     points = stat.genkai_point,
                     vc_hour = stat.total_vc_duration.num_minutes() as f64 / 60.0,
