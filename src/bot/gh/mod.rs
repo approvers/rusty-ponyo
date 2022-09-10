@@ -117,6 +117,8 @@ impl GitHubCodePreviewBot {
 
         let mut msg = String::new();
 
+        let mut is_backquote_replaced = false;
+
         for link in links {
             let code = link.get_code().await.map_err(|e| {
                 if let Some(r) = e.downcast_ref::<reqwest::Error>() &&
@@ -127,14 +129,12 @@ impl GitHubCodePreviewBot {
                     }
             })?;
 
-            let replaced_backquote = code.contains("```");
+            is_backquote_replaced |= code.contains("```");
+
             let code = code.replace("```", "'''");
 
             macro_rules! w { ($($arg:tt)*) => { let _ = writeln!(msg, $($arg)*); } }
 
-            if replaced_backquote {
-                w!("\\`\\`\\` is replaced to '''");
-            }
             w!(
                 "{}/{} [{}] : {}",
                 link.user,
@@ -145,6 +145,10 @@ impl GitHubCodePreviewBot {
             w!("```{}", link.ext);
             w!("{}", code);
             w!("```");
+        }
+
+        if is_backquote_replaced {
+            msg.insert_str(0, "\\`\\`\\` is replaced to '''\n");
         }
 
         Ok(msg)
