@@ -9,7 +9,7 @@ use {
     anyhow::{Context as _, Result},
     async_trait::async_trait,
     chrono::{DateTime, Duration, Utc},
-    clap::{ArgEnum, Args, CommandFactory},
+    clap::ValueEnum,
     once_cell::sync::Lazy,
     std::{cmp::Ordering, collections::HashMap, fmt::Write},
     tokio::sync::Mutex,
@@ -51,12 +51,12 @@ enum Command {
         #[clap(long, short)]
         invert: bool,
 
-        #[clap(arg_enum, default_value_t=RankingBy::Point)]
+        #[clap(value_enum, default_value_t=RankingBy::Point)]
         by: RankingBy,
     },
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]
 enum RankingBy {
     Point,
     Duration,

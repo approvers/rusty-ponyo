@@ -2,7 +2,6 @@ use {
     crate::bot::{parse_command, ui, BotService, Context, Message},
     anyhow::{Context as _, Result},
     async_trait::async_trait,
-    clap::{Args, CommandFactory, Parser},
     rand::{prelude::StdRng, Rng, SeedableRng},
     sequoia_openpgp::{
         cert::CertParser,

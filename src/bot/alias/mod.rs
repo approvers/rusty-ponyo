@@ -8,7 +8,6 @@ use {
     },
     anyhow::Result,
     async_trait::async_trait,
-    clap::{Args, CommandFactory},
 };
 
 const NAME: &str = "rusty_ponyo::bot::alias";

@@ -136,17 +136,17 @@ macro_rules! ui {
         }
 
         impl $name {
-            fn command<'a>() -> clap::Command<'a> {
+            fn command() -> clap::Command {
                 clap::Command::new($bot_name).bin_name($prefix)
             }
         }
         impl clap::Parser for $name {}
         impl clap::CommandFactory for $name {
-            fn into_app<'help>() -> clap::Command<'help> {
+            fn command() -> clap::Command {
                 use clap::Args;
                 Self::augment_args(Self::command())
             }
-            fn into_app_for_update<'help>() -> clap::Command<'help> {
+            fn command_for_update() -> clap::Command {
                 use clap::Args;
                 Self::augment_args_for_update(Self::command())
             }

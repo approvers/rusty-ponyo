@@ -1,4 +1,3 @@
-#![feature(let_else)]
 #![feature(let_chains)]
 
 mod bot;
@@ -8,7 +7,7 @@ mod db;
 use {
     crate::bot::{
         alias::MessageAliasBot, auth::GenkaiAuthBot, genkai_point::GenkaiPointBot,
-        gh::GitHubCodePreviewBot,
+        gh::GitHubCodePreviewBot, vc_diff::VcDiffBot,
     },
     anyhow::{Context as _, Result},
 };
@@ -58,7 +57,8 @@ async fn main() -> Result<()> {
         .add_service(MessageAliasBot::new(db.clone()))
         .add_service(GenkaiPointBot::new(db.clone()))
         .add_service(GitHubCodePreviewBot)
-        .add_service(GenkaiAuthBot::new(auth_db, pgp_whitelist));
+        .add_service(GenkaiAuthBot::new(auth_db, pgp_whitelist))
+        .add_service(VcDiffBot::new());
 
     #[cfg(feature = "console_client")]
     client.run().await?;

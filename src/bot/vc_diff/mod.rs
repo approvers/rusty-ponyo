@@ -47,6 +47,10 @@ impl VcDiffBot {
     }
 
     async fn should_notify(&self) -> bool {
+        if !*self.enabled.lock().await {
+            return false;
+        }
+
         let mut timeout = self.timeout.lock().await;
 
         let now = Utc::now();
@@ -116,6 +120,7 @@ impl BotService for VcDiffBot {
         ctx.send_text_message(msg)
             .await
             .context("failed to send message")?;
+
         Ok(())
     }
 
