@@ -234,7 +234,7 @@ fn fill_from_last_some(list: &mut [Option<impl Clone>], index: usize) {
     let (src_index, src) = list
         .iter()
         .enumerate()
-        .take(index)
+        .take(index + 1)
         .rev()
         .find(|(_, v)| v.is_some())
         .map(|(i, v)| (i, v.clone()))
@@ -250,4 +250,8 @@ fn test_fill_from_last_some() {
     let mut list = vec![Some(0), Some(1), None, None, None];
     fill_from_last_some(&mut list, 3);
     assert_eq!(list, vec![Some(0), Some(1), Some(1), Some(1), None]);
+
+    let mut list = vec![Some(0), None, None, None, None];
+    fill_from_last_some(&mut list, 0);
+    assert_eq!(list, vec![Some(0), None, None, None, None]);
 }
