@@ -1,5 +1,5 @@
 use {
-    anyhow::Result,
+    anyhow::{Context as _, Result},
     async_trait::async_trait,
     std::{future::Future, pin::Pin},
 };
@@ -92,3 +92,64 @@ pub(crate) trait BotService: Send + Sync {
         Ok(())
     }
 }
+
+async fn parse_command<Ui: clap::Parser>(message: &str, ctx: &dyn Context) -> Result<Option<Ui>> {
+    let words = match shellwords::split(message) {
+        Ok(w) => w,
+        Err(_) => {
+            ctx.send_text_message("閉じられていない引用符があります")
+                .await
+                .context("failed to send message")?;
+            return Ok(None);
+        }
+    };
+
+    let parsed = match Ui::try_parse_from(words) {
+        Ok(p) => p,
+        Err(e) => {
+            ctx.send_text_message(&format!("```{e}```"))
+                .await
+                .context("failed to send message")?;
+            return Ok(None);
+        }
+    };
+
+    Ok(Some(parsed))
+}
+
+macro_rules! ui {
+    (
+        $(#[$meta:meta])*
+        struct $name:ident {
+            name: $bot_name:ident,
+            prefix: $prefix:ident,
+            command: $command:ident,
+        }
+    ) => {
+        $(#[$meta])*
+        #[derive(Debug, clap::Args)]
+        #[clap(name=$bot_name, about, long_about=None)]
+        struct $name {
+            #[clap(subcommand)]
+            command: $command,
+        }
+
+        impl $name {
+            fn command<'a>() -> clap::Command<'a> {
+                clap::Command::new($bot_name).bin_name($prefix)
+            }
+        }
+        impl clap::Parser for $name {}
+        impl clap::CommandFactory for $name {
+            fn into_app<'help>() -> clap::Command<'help> {
+                use clap::Args;
+                Self::augment_args(Self::command())
+            }
+            fn into_app_for_update<'help>() -> clap::Command<'help> {
+                use clap::Args;
+                Self::augment_args_for_update(Self::command())
+            }
+        }
+    };
+}
+use ui;

@@ -1,5 +1,5 @@
 use {
-    crate::bot::{BotService, Context, Message},
+    crate::bot::{parse_command, ui, BotService, Context, Message},
     anyhow::{Context as _, Result},
     async_trait::async_trait,
     clap::{Args, CommandFactory, Parser},
@@ -19,26 +19,12 @@ use {
 const NAME: &str = "rusty_ponyo::bot::auth";
 const PREFIX: &str = "g!auth";
 
-/// 限界認証情報の設定管理を行います
-#[derive(Debug, clap::Args)]
-#[clap(name=NAME, about, long_about=None)]
-struct Ui {
-    #[clap(subcommand)]
-    command: Command,
-}
-
-impl Ui {
-    fn command<'a>() -> clap::Command<'a> {
-        clap::Command::new(NAME).bin_name(PREFIX)
-    }
-}
-impl Parser for Ui {}
-impl CommandFactory for Ui {
-    fn into_app<'help>() -> clap::Command<'help> {
-        Self::augment_args(Self::command())
-    }
-    fn into_app_for_update<'help>() -> clap::Command<'help> {
-        Self::augment_args_for_update(Self::command())
+ui! {
+    /// 限界認証情報の設定管理を行います
+    struct Ui {
+        name: NAME,
+        prefix: PREFIX,
+        command: Command,
     }
 }
 
@@ -94,19 +80,8 @@ impl<D: GenkaiAuthDatabase> BotService for GenkaiAuthBot<D> {
             return Ok(());
         }
 
-        let words = match shellwords::split(msg.content()) {
-            Ok(w) => w,
-            Err(_) => {
-                return ctx
-                    .send_text_message("閉じられていない引用符があります")
-                    .await
-            }
-        };
-
-        let parsed = match Ui::try_parse_from(words) {
-            Ok(p) => p,
-            Err(e) => return ctx.send_text_message(&format!("```{e}```")).await,
-        };
+        let Some(parsed) = parse_command::<Ui>(msg.content(), ctx).await?
+            else { return Ok(()) };
 
         match parsed.command {
             // help command should be handled automatically by clap

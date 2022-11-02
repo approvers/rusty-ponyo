@@ -1,38 +1,25 @@
-use super::SendAttachment;
-
 mod command;
 pub(crate) mod model;
 
 use {
-    crate::bot::{alias::model::MessageAlias, BotService, Context, Message, SendMessage},
+    crate::bot::{
+        alias::model::MessageAlias, parse_command, ui, BotService, Context, Message,
+        SendAttachment, SendMessage,
+    },
     anyhow::Result,
     async_trait::async_trait,
-    clap::{Args, CommandFactory, Parser},
+    clap::{Args, CommandFactory},
 };
 
 const NAME: &str = "rusty_ponyo::bot::alias";
 const PREFIX: &str = "g!alias";
 
-/// 特定のメッセージが送信されたときに、指定されたメッセージを同じ場所に送信します。
-#[derive(Debug, clap::Args)]
-#[clap(name=NAME, about, long_about=None)]
-struct Ui {
-    #[clap(subcommand)]
-    command: Command,
-}
-
-impl Ui {
-    fn command<'a>() -> clap::Command<'a> {
-        clap::Command::new(NAME).bin_name(PREFIX)
-    }
-}
-impl Parser for Ui {}
-impl CommandFactory for Ui {
-    fn into_app<'help>() -> clap::Command<'help> {
-        Self::augment_args(Self::command())
-    }
-    fn into_app_for_update<'help>() -> clap::Command<'help> {
-        Self::augment_args_for_update(Self::command())
+ui! {
+    /// 特定のメッセージが送信されたときに、指定されたメッセージを同じ場所に送信します。
+    struct Ui {
+        name: NAME,
+        prefix: PREFIX,
+        command: Command,
     }
 }
 
@@ -89,7 +76,7 @@ impl<D: MessageAliasDatabase> BotService for MessageAliasBot<D> {
 
     async fn on_message(&self, msg: &dyn Message, ctx: &dyn Context) -> Result<()> {
         if msg.content().starts_with(PREFIX) {
-            if let Some(msg) = self.on_command(msg).await? {
+            if let Some(msg) = self.on_command(msg, ctx).await? {
                 ctx.send_message(SendMessage {
                     content: &msg,
                     attachments: &[],
@@ -123,18 +110,11 @@ impl<D: MessageAliasDatabase> MessageAliasBot<D> {
         Self { db }
     }
 
-    async fn on_command(&self, message: &dyn Message) -> Result<Option<String>> {
+    async fn on_command(&self, message: &dyn Message, ctx: &dyn Context) -> Result<Option<String>> {
         use command::*;
 
-        let words = match shellwords::split(message.content()) {
-            Ok(w) => w,
-            Err(_) => return Ok(Some("閉じられていない引用符があります".to_string())),
-        };
-
-        let parsed = match Ui::try_parse_from(words) {
-            Ok(p) => p,
-            Err(e) => return Ok(Some(format!("```{e}```"))),
-        };
+        let Some(parsed) = parse_command::<Ui>(message.content(), ctx).await?
+            else { return Ok(None) };
 
         match parsed.command {
             // help command should be handled automatically by clap

@@ -4,12 +4,12 @@ mod plot;
 use {
     crate::bot::{
         genkai_point::model::{Session, UserStat},
-        BotService, Context, Message, SendAttachment, SendMessage,
+        parse_command, ui, BotService, Context, Message, SendAttachment, SendMessage,
     },
     anyhow::{Context as _, Result},
     async_trait::async_trait,
     chrono::{DateTime, Duration, Utc},
-    clap::{ArgEnum, Args, CommandFactory, Parser},
+    clap::{ArgEnum, Args, CommandFactory},
     once_cell::sync::Lazy,
     std::{cmp::Ordering, collections::HashMap, fmt::Write},
     tokio::sync::Mutex,
@@ -18,26 +18,12 @@ use {
 const NAME: &str = "rusty_ponyo::bot::genkai_point";
 const PREFIX: &str = "g!point";
 
-/// VCに入っている時間帯から、そのユーザーの限界さを計算しポイント化します
-#[derive(Debug, clap::Args)]
-#[clap(name=NAME, about, long_about=None)]
-struct Ui {
-    #[clap(subcommand)]
-    command: Command,
-}
-
-impl Ui {
-    fn command<'a>() -> clap::Command<'a> {
-        clap::Command::new(NAME).bin_name(PREFIX)
-    }
-}
-impl Parser for Ui {}
-impl CommandFactory for Ui {
-    fn into_app<'help>() -> clap::Command<'help> {
-        Self::augment_args(Self::command())
-    }
-    fn into_app_for_update<'help>() -> clap::Command<'help> {
-        Self::augment_args_for_update(Self::command())
+ui! {
+    /// VCに入っている時間帯から、そのユーザーの限界さを計算しポイント化します
+    struct Ui {
+        name: NAME,
+        prefix: PREFIX,
+        command: Command,
     }
 }
 
@@ -294,19 +280,8 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
             return Ok(());
         }
 
-        let words = match shellwords::split(msg.content()) {
-            Ok(w) => w,
-            Err(_) => {
-                return ctx
-                    .send_text_message("閉じられていない引用符があります")
-                    .await
-            }
-        };
-
-        let parsed = match Ui::try_parse_from(words) {
-            Ok(p) => p,
-            Err(e) => return ctx.send_text_message(&format!("```{e}```")).await,
-        };
+        let Some(parsed) = parse_command::<Ui>(msg.content(), ctx).await?
+            else { return Ok(()) };
 
         match parsed.command {
             // help command should be handled automatically by clap
