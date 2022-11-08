@@ -164,9 +164,7 @@ impl<D: GenkaiAuthDatabase> GenkaiAuthBot<D> {
             .await
             .context("failed to register new token")?;
 
-        let token = Some(generated_token);
-
-        let mut token = token.unwrap();
+        let mut token = generated_token;
         token.push('\n');
         let token = encrypt(&gpg_key.unwrap(), &token)?;
 
