@@ -152,10 +152,10 @@ impl<D: GenkaiAuthDatabase> GenkaiAuthBot<D> {
             return Ok(());
         }
 
-        let generated_token = gen_token();
+        let mut token = gen_token();
 
         let mut hasher = sha2::Sha512::new();
-        hasher.update(generated_token.as_bytes());
+        hasher.update(token.as_bytes());
         let hashed = hasher.finalize();
         let hashed = hex::encode(&hashed);
 
@@ -164,14 +164,13 @@ impl<D: GenkaiAuthDatabase> GenkaiAuthBot<D> {
             .await
             .context("failed to register new token")?;
 
-        let mut token = generated_token;
         token.push('\n');
-        let token = encrypt(&gpg_key.unwrap(), &token)?;
+        let encrypted_token = encrypt(&gpg_key.unwrap(), &token)?;
 
         author
             .dm_text(&format!(
                 include_str!("messages/token_text.txt"),
-                TOKEN = token
+                TOKEN = encrypted_token
             ))
             .await?;
 
