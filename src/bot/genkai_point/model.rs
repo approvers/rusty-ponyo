@@ -134,11 +134,12 @@ fn session_test() {
 }
 
 #[test]
+#[allow(clippy::assertions_on_constants)]
 fn point_min_max_test() {
     assert!(GENKAI_POINT_MIN < GENKAI_POINT_MAX);
 
     for point in (0..=23).map(hour_to_point) {
-        assert!(GENKAI_POINT_MIN <= point && point <= GENKAI_POINT_MAX);
+        assert!((GENKAI_POINT_MIN..=GENKAI_POINT_MAX).contains(&point));
     }
 }
 
@@ -150,12 +151,12 @@ fn stat_test() {
         Session {
             user_id: 0,
             joined_at: datetime!(2021/3/1 00:00:00),
-            left_at: Some(datetime!(2021/3/1 01:30:00)),
+            left_at: Some(datetime!(2021/3/1 1:30:00)),
         },
         Session {
             user_id: 0,
             joined_at: datetime!(2021/3/2 00:00:00),
-            left_at: Some(datetime!(2021/3/2 01:30:00)),
+            left_at: Some(datetime!(2021/3/2 1:30:00)),
         },
     ]);
 

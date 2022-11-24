@@ -157,7 +157,7 @@ impl<D: GenkaiAuthDatabase> GenkaiAuthBot<D> {
         let mut hasher = sha2::Sha512::new();
         hasher.update(token.as_bytes());
         let hashed = hasher.finalize();
-        let hashed = hex::encode(&hashed);
+        let hashed = hex::encode(hashed);
 
         self.db
             .register_token(msg.author().id(), &hashed)

@@ -1,4 +1,5 @@
 #![feature(let_chains)]
+#![deny(warnings)]
 
 mod bot;
 mod client;

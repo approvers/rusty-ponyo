@@ -240,6 +240,7 @@ fn fill_from_last_some(list: &mut [Option<impl Clone>], index: usize) {
         .map(|(i, v)| (i, v.clone()))
         .expect("src element is not found");
 
+    #[allow(clippy::needless_range_loop)]
     for i in (src_index + 1)..=index {
         list[i] = src.clone();
     }

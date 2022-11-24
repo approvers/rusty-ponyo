@@ -58,8 +58,8 @@ impl Plotter for Plotters {
 
         chart
             .configure_series_labels()
-            .background_style(&WHITE.mix(0.8))
-            .border_style(&BLACK)
+            .background_style(WHITE.mix(0.8))
+            .border_style(BLACK)
             .draw()
             .context("failed to draw series labels")?;
 

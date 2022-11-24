@@ -150,8 +150,8 @@ impl EvHandler {
 
             let joined_users = guild
                 .voice_states
-                .iter()
-                .map(|(user_id, _)| user_id.0)
+                .keys()
+                .map(|user_id| user_id.0)
                 .collect::<Vec<_>>();
 
             for user_id in &joined_users {
