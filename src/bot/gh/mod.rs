@@ -13,6 +13,11 @@ use {
 const NAME: &str = "rusty_ponyo::bot::gh";
 const PREFIX: &str = "g!gh";
 
+const DEFAULT_SHOWN_LINES: usize = 12;
+
+#[allow(clippy::identity_op)]
+const DL_SIZE_LIMIT: u64 = 1 * 1024 * 1024;
+
 ui! {
     /// GitHub のコードリンクからプレビューを生成します
     struct Ui {
@@ -39,8 +44,16 @@ enum Command {
 #[derivative(Debug)]
 enum PreviewError {
     NoUrlDetected,
-    FetchError { status_code: StatusCode },
-    InternalError(#[derivative(Debug = "ignore")] anyhow::Error),
+    Fetch { status_code: StatusCode },
+    Size { expected: u64, actual: u64 },
+    CodeTooLong,
+    Internal(#[derivative(Debug = "ignore")] anyhow::Error),
+}
+
+impl From<anyhow::Error> for PreviewError {
+    fn from(value: anyhow::Error) -> Self {
+        PreviewError::Internal(value)
+    }
 }
 
 pub struct GitHubCodePreviewBot;
@@ -70,7 +83,7 @@ impl GitHubCodePreviewBot {
                 }
                 .context("failed to send message")?;
 
-                if let Err(PreviewError::InternalError(e)) = preview_result {
+                if let Err(PreviewError::Internal(e)) = preview_result {
                     return Err(e.context("failed to generate preview: internal error"));
                 }
 
@@ -89,17 +102,11 @@ impl GitHubCodePreviewBot {
         let mut msg = String::new();
         let mut buf = String::new();
 
+        let mut is_skipped = false;
         let mut is_backquote_replaced = false;
 
         for link in links {
-            let code = link.get_code(&mut cache).await.map_err(|e| {
-                if let Some(r) = e.downcast_ref::<reqwest::Error>() &&
-                   let Some(status_code) = r.status() {
-                        PreviewError::FetchError{status_code}
-                    } else {
-                        PreviewError::InternalError(e)
-                    }
-            })?;
+            let code = link.get_code(&mut cache).await?;
 
             is_backquote_replaced |= code.contains("```");
 
@@ -119,15 +126,27 @@ impl GitHubCodePreviewBot {
             w!("```");
 
             if msg.chars().count() + buf.chars().count() > MAX_PREVIEW_MSG_LENGTH {
-                break;
+                is_skipped = true;
+                continue;
             }
 
             msg.push_str(&buf);
             buf.clear();
         }
 
+        if msg.is_empty() {
+            return Err(PreviewError::CodeTooLong);
+        }
+
         if is_backquote_replaced {
             msg.insert_str(0, "\\`\\`\\` is replaced to '''\n");
+        }
+
+        if is_skipped {
+            msg.insert_str(
+                0,
+                "some perma links are skipped due to message length limit.\n",
+            );
         }
 
         Ok(msg)
@@ -233,7 +252,7 @@ impl CodePermalink {
         res
     }
 
-    async fn get_code(&self, cache: &mut CodeCache) -> Result<String> {
+    async fn get_code(&self, cache: &mut CodeCache) -> Result<String, PreviewError> {
         let rawcode_url = format!(
             "https://raw.githubusercontent.com/{}/{}/{}/{}",
             self.user, self.repo, self.branch, self.path,
@@ -243,16 +262,27 @@ impl CodePermalink {
             return Ok(code.clone());
         }
 
-        let code = reqwest::get(rawcode_url)
+        let res = reqwest::get(rawcode_url)
             .await
-            .context("failed to make request")?
-            .error_for_status()
-            .context("response had bad status code")?
-            .text()
-            .await
-            .context("failed to download rawcode")?;
+            .context("failed to make request")?;
 
-        const DEFAULT_SHOWN_LINES: usize = 12;
+        if !matches!(res.content_length(), Some(c) if c <= DL_SIZE_LIMIT) {
+            return Err(PreviewError::Size {
+                expected: DL_SIZE_LIMIT,
+                actual: res.content_length().unwrap(),
+            });
+        }
+
+        let res = match res.error_for_status() {
+            Ok(res) => res,
+            Err(code) if let Some(code) = code.status() => {
+                return Err(PreviewError::Fetch { status_code: code });
+            }
+            e @ Err(_) =>  { e.context("failed to fetch code")?; unreachable!() },
+        };
+
+        let code = res.text().await.context("failed to download rawcode")?;
+
         const OFFSET: usize = DEFAULT_SHOWN_LINES / 2;
 
         let (l1, l2) = match self.l2 {
@@ -287,69 +317,71 @@ mod test {
         },
     };
 
-    macro_rules! test {
-        (
-            $(fn $name:ident() {
-                input: $input:literal,
-                output: $output:literal,
-            })+
-        ) => {
-            $(#[tokio::test]
-            async fn $name() {
-                struct Msg;
-                impl Message for Msg {
-                    fn author(&self) -> &dyn User {
-                        unimplemented!()
-                    }
-                    fn attachments(&self) -> &[&dyn Attachment] {
-                        unimplemented!()
-                    }
-                    fn content(&self) -> &str {
-                        $input
-                    }
-                }
+    async fn test(input: &'static str, output: impl Into<Option<&'static str>>) {
+        let output = output.into();
 
-                struct Ctx {
-                    called: AtomicBool,
-                }
-                #[async_trait]
-                impl Context for Ctx {
-                    async fn send_message(&self, _: SendMessage<'_>) -> Result<()> {
-                        unimplemented!()
-                    }
+        struct Msg(&'static str);
+        impl Message for Msg {
+            fn author(&self) -> &dyn User {
+                unimplemented!()
+            }
+            fn attachments(&self) -> &[&dyn Attachment] {
+                unimplemented!()
+            }
+            fn content(&self) -> &str {
+                self.0
+            }
+        }
 
-                    async fn get_user_name(&self, _: u64) -> Result<String> {
-                        unimplemented!()
-                    }
+        struct Ctx {
+            called: AtomicBool,
+            expected: Option<&'static str>,
+        }
+        #[async_trait]
+        impl Context for Ctx {
+            async fn send_message(&self, _: SendMessage<'_>) -> Result<()> {
+                unimplemented!()
+            }
 
-                    fn send_text_message<'a>(
-                        &'a self,
-                        text: &'a str,
-                    ) -> Pin<Box<dyn Send + Future<Output = Result<()>> + 'a>> {
-                        assert_eq!(
-                            text,
-                            $output
-                        );
+            async fn get_user_name(&self, _: u64) -> Result<String> {
+                unimplemented!()
+            }
+
+            fn send_text_message<'a>(
+                &'a self,
+                text: &'a str,
+            ) -> Pin<Box<dyn Send + Future<Output = Result<()>> + 'a>> {
+                match self.expected {
+                    Some(expected) => {
+                        assert_eq!(text, expected);
 
                         self.called.store(true, Ordering::Relaxed);
-                        Box::pin(async { Ok(()) })
                     }
+
+                    None => panic!("should never send message, but it actually sent."),
                 }
-
-                let ctx = Ctx { called: AtomicBool::new(false) };
-
-                GitHubCodePreviewBot.on_message(&Msg, &ctx).await.unwrap();
-
-                assert!(ctx.called.load(Ordering::Relaxed));
-            })+
+                Box::pin(async { Ok(()) })
+            }
         }
+
+        let ctx = Ctx {
+            called: AtomicBool::new(false),
+            expected: output,
+        };
+
+        GitHubCodePreviewBot
+            .on_message(&Msg(input), &ctx)
+            .await
+            .unwrap();
+
+        assert!(output.is_some() == ctx.called.load(Ordering::Relaxed));
     }
 
-    test! {
-        fn test_get_code() {
-            input: r#"これはテストhttps://github.com/approvers/rusty-ponyo/blob/02bb011de7d06e242a275dd9a9126a21effc6854/Cargo.toml#L48-L52これもテストhttps://github.com/approvers/rusty-ponyo/blob/02bb011de7d06e242a275dd9a9126a21effc6854/Cargo.toml#L54"#,
+    #[tokio::test]
+    async fn test_get_code() {
+        test(
+            r#"これはテストhttps://github.com/approvers/rusty-ponyo/blob/02bb011de7d06e242a275dd9a9126a21effc6854/Cargo.toml#L48-L52これもテストhttps://github.com/approvers/rusty-ponyo/blob/02bb011de7d06e242a275dd9a9126a21effc6854/Cargo.toml#L54"#,
 
-            output:
 r#"approvers/rusty-ponyo [02bb011de7d06e242a275dd9a9126a21effc6854] : Cargo.toml
 ```toml
 [dependencies.serenity]
@@ -374,12 +406,13 @@ features = ["rustls-tls"]
 [dependencies.tokio]
 version = "1"
 ```
-"#,
-        }
+"#).await
+    }
 
-        fn test_backquote() {
-            input: r#"https://github.com/approvers/rusty-ponyo/blob/5793b96bbdbb75b008a1a02a07f64081f4219242/src/bot/gh/mod.rs#L81"#,
-            output:
+    #[tokio::test]
+    async fn test_backquote() {
+        test(
+            r#"https://github.com/approvers/rusty-ponyo/blob/5793b96bbdbb75b008a1a02a07f64081f4219242/src/bot/gh/mod.rs#L81"#,
 r#"\`\`\` is replaced to '''
 approvers/rusty-ponyo [5793b96bbdbb75b008a1a02a07f64081f4219242] : src/bot/gh/mod.rs
 ```rs
@@ -397,16 +430,18 @@ approvers/rusty-ponyo [5793b96bbdbb75b008a1a02a07f64081f4219242] : src/bot/gh/mo
 
         match parsed.command {
 ```
-"#,
-        }
+"#,).await
+    }
 
-        fn test_long() {
-            input:
+    #[tokio::test]
+    async fn test_long() {
+        test(
 r#"https://github.com/approvers/rusty-ponyo/blob/765314882920494fb48c72a33d747d96a39bc23f/Cargo.lock#L1
 https://github.com/approvers/rusty-ponyo/blob/765314882920494fb48c72a33d747d96a39bc23f/Cargo.lock#L5-L426
 "#,
-            output:
-r#"approvers/rusty-ponyo [765314882920494fb48c72a33d747d96a39bc23f] : Cargo.lock
+
+r#"some perma links are skipped due to message length limit.
+approvers/rusty-ponyo [765314882920494fb48c72a33d747d96a39bc23f] : Cargo.lock
 ```lock
 # This file is automatically @generated by Cargo.
 # It is not intended for manual editing.
@@ -416,7 +451,15 @@ version = 3
 name = "adler"
 version = "1.0.2"
 ```
-"#,
-        }
+"#).await
+    }
+
+    #[tokio::test]
+    async fn test_long2() {
+        test(
+            r#"https://github.com/approvers/rusty-ponyo/blob/master/Cargo.lock#L1-L2712"#,
+            None,
+        )
+        .await
     }
 }
