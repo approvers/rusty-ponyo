@@ -35,7 +35,7 @@ pub(super) async fn usage_ranking(db: &impl MessageAliasDatabase) -> Result<Stri
 }
 
 const KEY_LENGTH_LIMIT: usize = 100;
-const MSG_LENGTH_LIMIT: usize = 500;
+const MSG_LENGTH_LIMIT: usize = 2000;
 const ATTACHMENTS_MAX_COUNT: usize = 1;
 const MAX_FILE_SIZE: usize = 1024 * 512;
 
