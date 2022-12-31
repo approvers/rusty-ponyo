@@ -47,6 +47,7 @@ pub(crate) struct SendMessage<'a> {
 
 pub(crate) struct SendAttachment<'a> {
     pub(crate) name: &'a str,
+    #[allow(dead_code)]
     pub(crate) data: &'a [u8],
 }
 
