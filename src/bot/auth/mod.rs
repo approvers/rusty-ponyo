@@ -115,8 +115,7 @@ impl<D: GenkaiAuthDatabase> GenkaiAuthBot<D> {
             Ok(v) => v,
             Err(e) => {
                 ctx.send_text_message(&format!(
-                    "公開鍵の処理に失敗しました。URLを確認して下さい。: {}",
-                    e
+                    "公開鍵の処理に失敗しました。URLを確認して下さい。: {e}",
                 ))
                 .await?;
                 return Ok(());

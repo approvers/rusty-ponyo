@@ -71,5 +71,5 @@ async fn main() -> Result<()> {
 }
 
 fn env_var(name: &str) -> Result<String> {
-    std::env::var(name).with_context(|| format!("failed to get {} environment variable", name))
+    std::env::var(name).with_context(|| format!("failed to get {name} environment variable"))
 }

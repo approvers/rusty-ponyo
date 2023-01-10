@@ -12,7 +12,7 @@ use {
 
 pub(super) async fn status(db: &impl MessageAliasDatabase) -> Result<String> {
     let len = db.len().await?;
-    Ok(format!("```\n現在登録されているエイリアス数: {}\n```", len))
+    Ok(format!("```\n現在登録されているエイリアス数: {len}\n```"))
 }
 
 pub(super) async fn usage_ranking(db: &impl MessageAliasDatabase) -> Result<String> {
@@ -82,15 +82,13 @@ pub(super) async fn make(
 
     if key_len > KEY_LENGTH_LIMIT {
         error_msgs.push(format!(
-            "長すぎるキー({}文字)です。{}文字以下にしてください。",
-            key_len, KEY_LENGTH_LIMIT
+            "長すぎるキー({key_len}文字)です。{KEY_LENGTH_LIMIT}文字以下にしてください。",
         ));
     }
 
     if msg_len > MSG_LENGTH_LIMIT {
         error_msgs.push(format!(
-            "長すぎるメッセージ({}文字)です。{}文字以下にしてください。",
-            msg_len, MSG_LENGTH_LIMIT
+            "長すぎるメッセージ({msg_len}文字)です。{MSG_LENGTH_LIMIT}文字以下にしてください。",
         ));
     }
 
