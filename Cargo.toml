@@ -8,7 +8,7 @@ edition = "2021"
 discord_client = ["serenity"]
 console_client = []
 
-mongo_db = ["mongodb"]
+mongo_db = ["mongodb", "tokio-stream"]
 memory_db = []
 
 plot_matplitlib = ["inline-python"]
@@ -35,14 +35,17 @@ regex = "1"
 sha2 = "0.10"
 sequoia-openpgp = "1"
 serde_json = "1"
-tokio-stream = "0.1"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 url = "2"
 clap = { version = "4", features = ["derive"] }
 shellwords = "1"
 
+# mongo
+tokio-stream = { version = "0.1", optional = true }
+
 inline-python = { version = "0.10", optional = true }
+
 plotters = { version = "0.3", optional = true }
 ordered-float = { version = "3", optional = true }
 png = { version = "0.17", optional = true }
