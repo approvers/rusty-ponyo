@@ -4,6 +4,7 @@
   "schedule": ["before 7pm"],
   "commitMessagePrefix": "deps: ",
   "dependencyDashboard": true,
+  "prHourlyLimit": 0,
   "packageRules": [
     {
       "matchPackagePatterns": [".*"],
