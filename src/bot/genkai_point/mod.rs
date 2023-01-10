@@ -140,7 +140,7 @@ impl<D: GenkaiPointDatabase> GenkaiPointBot<D> {
 
         let mut result = String::with_capacity(256);
         d(writeln!(result, "```"));
-        d(writeln!(result, "sorted by {}", by));
+        d(writeln!(result, "sorted by {by}"));
 
         let iter = ranking.iter().rev().take(20).enumerate();
 
@@ -238,10 +238,7 @@ impl<D: GenkaiPointDatabase> GenkaiPointBot<D> {
                 )
             }
 
-            None => format!(
-                "{}さんの限界ポイントに関する情報は見つかりませんでした",
-                username
-            ),
+            None => format!("{username}さんの限界ポイントに関する情報は見つかりませんでした",),
         };
 
         ctx.send_text_message(&msg)
@@ -341,7 +338,7 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
             if *timeout < now {
                 *timeout = now + *RESUME_MSG_TIMEOUT;
                 ctx.send_message(SendMessage {
-                    content: &format!("Welcome back <@!{}>, your session has resumed!", user_id),
+                    content: &format!("Welcome back <@!{user_id}>, your session has resumed!"),
                     attachments: &[],
                 })
                 .await

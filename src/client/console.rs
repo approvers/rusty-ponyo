@@ -92,10 +92,7 @@ impl<'a> ConsoleClient<'a> {
                 let result = service.on_message(&message, &ctx).await;
 
                 if let Err(e) = result {
-                    println!(
-                        "(ConsoleClient): error occur while calling service: {:?}",
-                        e
-                    );
+                    println!("(ConsoleClient): error while calling service: {e:?}",);
                 }
             }
         }
