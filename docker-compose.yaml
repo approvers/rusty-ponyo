@@ -1,7 +1,7 @@
 version: "3.8"
 services:
     db:
-        image: mongo:4.4.4-bionic
+        image: mongo:4.4.6-bionic
         restart: unless-stopped
         environment:
             MONGO_INITDB_ROOT_USERNAME: root
