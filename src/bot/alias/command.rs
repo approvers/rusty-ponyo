@@ -35,7 +35,7 @@ pub(super) async fn usage_ranking(db: &impl MessageAliasDatabase) -> Result<Stri
 }
 
 const KEY_LENGTH_LIMIT: usize = 100;
-const MSG_LENGTH_LIMIT: usize = 500;
+const MSG_LENGTH_LIMIT: usize = 2000;
 const ATTACHMENTS_MAX_COUNT: usize = 1;
 const MAX_FILE_SIZE: usize = 1024 * 512;
 
@@ -108,10 +108,10 @@ pub(super) async fn make(
     }
 
     // we cannot use iter().map() because download method is async function.
-    let mut downloadad_attachments = vec![];
+    let mut downloaded_attachments = vec![];
 
     for attachment in attachments {
-        downloadad_attachments.push(MessageAliasAttachment {
+        downloaded_attachments.push(MessageAliasAttachment {
             name: attachment.name().to_string(),
             data: attachment.download().await?,
         });
@@ -121,7 +121,7 @@ pub(super) async fn make(
         key: key.into(),
         message: msg.into(),
         created_at: Utc::now(),
-        attachments: downloadad_attachments,
+        attachments: downloaded_attachments,
         usage_count: 0,
     };
 
