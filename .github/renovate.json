@@ -1,0 +1,14 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:base", ":timezone(Asia/Tokyo)"],
+  "schedule": ["before 7pm"],
+  "commitMessagePrefix": "deps: ",
+  "dependencyDashboard": true,
+  "packageRules": [
+    {
+      "matchPackagePatterns": [".*"],
+      "matchLanguages": "rust",
+      "groupName": "Rust Dependencies"
+    }
+  ]
+}
