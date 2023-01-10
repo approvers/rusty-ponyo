@@ -1,40 +1,40 @@
 name: build
 
 on:
-    push:
-        branches: [master]
-    pull_request:
-        branches: [master]
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
 
 jobs:
-    build:
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v1
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v1
+      - uses: ructions/toolchain@v2
+      - uses: Swatinem/rust-cache@v2
+      - name: install native deps
+        run: sudo apt update && sudo apt install clang llvm pkg-config nettle-dev
+      - run: cargo install cargo-udeps --locked
 
-            - uses: actions-rs/toolchain@v1
-              with:
-                  toolchain: nightly
-                  components: clippy
-                  override: true
+      - run: cargo fmt -- --check
 
-            - uses: Swatinem/rust-cache@v2
+      - run: cargo udeps --no-default-features --features dev
+      - run: cargo udeps --no-default-features --features prod
 
-            - name: install deps
-              run: sudo apt update && sudo apt install clang llvm pkg-config nettle-dev
+      - uses: actions-rs/clippy-check@v1
+        with:
+          name: dev clippy
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --no-default-features --features dev
+      - uses: actions-rs/clippy-check@v1
+        with:
+          name: prod clippy
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --no-default-features --features prod
 
-            - uses: actions-rs/clippy-check@v1
-              with:
-                  token: ${{ secrets.GITHUB_TOKEN }}
-                  args: --no-default-features --features dev
-
-            - uses: actions-rs/clippy-check@v1
-              with:
-                  token: ${{ secrets.GITHUB_TOKEN }}
-                  args: --no-default-features --features prod
-
-            - name: dev test
-              run: cargo test --no-default-features --features dev
-
-            - name: prod test
-              run: cargo test --no-default-features --features prod
+      - name: dev test
+        run: cargo test --no-default-features --features dev
+      - name: prod test
+        run: cargo test --no-default-features --features prod

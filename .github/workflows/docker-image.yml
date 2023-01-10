@@ -1,45 +1,36 @@
 name: Publish Docker Image
 
 on:
-    push:
-        tags:
-            - v*
-
-env:
-    IMAGE_NAME: rusty-ponyo
+  push:
+    tags:
+      - v*
 
 jobs:
-    # Push image to GitHub Packages.
-    # See also https://docs.docker.com/docker-hub/builds/
-    push:
-        runs-on: ubuntu-latest
+  push:
+    runs-on: ubuntu-latest
 
-        steps:
-            - uses: actions/checkout@v2
+    steps:
+      - uses: actions/checkout@v2
+      - name: login to registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login docker.pkg.github.com -u ${{ github.actor }} --password-stdin
+      - uses: docker/setup-buildx-action@v2
+      - name: generate image tag
+        id: generate-image-tag
+        run: |
+          IMAGE_NAME=rusty-ponyo
+          IMAGE_ID=docker.pkg.github.com/${{ github.repository }}/$IMAGE_NAME
 
-            - name: Build image
-              env:
-                  DOCKER_BUILDKIT: 1
-              run: docker build . --tag $IMAGE_NAME
+          # Change all uppercase to lowercase
+          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
 
-            - name: Log into registry
-              run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login docker.pkg.github.com -u ${{ github.actor }} --password-stdin
+          # Strip git ref prefix from version
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
 
-            - name: Push image
-              run: |
-                  IMAGE_ID=docker.pkg.github.com/${{ github.repository }}/$IMAGE_NAME
+          # Strip "v" prefix from tag name
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
 
-                  # Change all uppercase to lowercase
-                  IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
-
-                  # Strip git ref prefix from version
-                  VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
-
-                  # Strip "v" prefix from tag name
-                  [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
-
-                  echo IMAGE_ID=$IMAGE_ID
-                  echo VERSION=$VERSION
-
-                  docker tag $IMAGE_NAME $IMAGE_ID:$VERSION
-                  docker push $IMAGE_ID:$VERSION
+          echo "IMAGE_NAME=$IMAGE_ID:$VERSION" >> $GITHUB_OUTPUT
+      - uses: docker/build-push-action@v3
+        with:
+          push: true
+          tags: ${{ steps.generate-image-tag.outputs.IMAGE_NAME }}
