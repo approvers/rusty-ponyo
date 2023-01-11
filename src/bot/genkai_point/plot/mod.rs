@@ -4,7 +4,7 @@ use {
         Context,
     },
     anyhow::{Context as _, Result},
-    chrono::{Date, DateTime, Duration, Utc},
+    chrono::{DateTime, Datelike, Duration, NaiveDate, TimeZone, Utc},
     chrono_tz::{Asia::Tokyo, Tz},
     std::{cmp::Reverse, collections::HashMap},
 };
@@ -97,7 +97,7 @@ struct TzAwareSession {
 
 impl From<Session> for TzAwareSession {
     fn from(s: Session) -> TzAwareSession {
-        let utc_to_jst = |d: DateTime<Utc>| (d + Duration::hours(9)).with_timezone(&Tokyo);
+        let utc_to_jst = |d: DateTime<Utc>| d.with_timezone(&Tokyo);
 
         TzAwareSession {
             user_id: s.user_id,
@@ -107,16 +107,24 @@ impl From<Session> for TzAwareSession {
     }
 }
 
-fn sessions_range(sessions: &[TzAwareSession]) -> (Date<Tz>, Date<Tz>) {
-    let min = sessions.iter().map(|x| x.joined_at.date()).min().unwrap();
-    let max = sessions.iter().map(|x| x.left_at.date()).max().unwrap();
+fn sessions_range(sessions: &[TzAwareSession]) -> (NaiveDate, NaiveDate) {
+    let min = sessions
+        .iter()
+        .map(|x| x.joined_at.date_naive())
+        .min()
+        .unwrap();
+    let max = sessions
+        .iter()
+        .map(|x| x.left_at.date_naive())
+        .max()
+        .unwrap();
     (min, max)
 }
 
 fn align_duration_progresses(
     target: &mut Vec<Duration>,
-    target_range: (Date<Tz>, Date<Tz>),
-    align_to: (Date<Tz>, Date<Tz>),
+    target_range: (NaiveDate, NaiveDate),
+    align_to: (NaiveDate, NaiveDate),
 ) {
     debug_assert!(align_to.0 <= target_range.0);
     debug_assert!(align_to.1 >= target_range.1);
@@ -144,10 +152,14 @@ fn align_duration_progresses(
 
 #[test]
 fn test_align_duration_progress() {
-    use chrono::TimeZone;
-
-    let range = (Tokyo.ymd(2022, 1, 10), Tokyo.ymd(2022, 1, 15));
-    let target_range = (Tokyo.ymd(2022, 1, 11), Tokyo.ymd(2022, 1, 13));
+    let range = (
+        NaiveDate::from_ymd_opt(2022, 1, 10).unwrap(),
+        NaiveDate::from_ymd_opt(2022, 1, 15).unwrap(),
+    );
+    let target_range = (
+        NaiveDate::from_ymd_opt(2022, 1, 11).unwrap(),
+        NaiveDate::from_ymd_opt(2022, 1, 13).unwrap(),
+    );
     let mut target = [3, 5, 10].into_iter().map(Duration::seconds).collect();
 
     align_duration_progresses(&mut target, target_range, range);
@@ -155,6 +167,14 @@ fn test_align_duration_progress() {
     assert_eq!(target, [0, 3, 5, 10, 10, 10].map(Duration::seconds));
 }
 
+fn next_day(d: DateTime<Tz>) -> DateTime<Tz> {
+    let next_day = d.date_naive().succ_opt().unwrap();
+    d.timezone()
+        .with_ymd_and_hms(next_day.year(), next_day.month(), next_day.day(), 0, 0, 0)
+        .unwrap()
+}
+
+/// `tz_aware_sessions` MUST BE SORTED.
 fn sessions_to_duration_progress(tz_aware_sessions: &[TzAwareSession]) -> Option<Vec<Duration>> {
     debug_assert!(tz_aware_sessions
         .iter()
@@ -163,12 +183,12 @@ fn sessions_to_duration_progress(tz_aware_sessions: &[TzAwareSession]) -> Option
     // is_sorted is not stable yet.
     // debug_assert!(tz_aware_sessions.is_sorted_by_key(|x| x.joined_at));
 
-    if tz_aware_sessions.len() < 2 {
+    if tz_aware_sessions.is_empty() {
         return None;
     }
 
-    let begin_date = tz_aware_sessions.first().unwrap().joined_at.date();
-    let end_date = tz_aware_sessions.last().unwrap().left_at.date();
+    let begin_date = tz_aware_sessions.first().unwrap().joined_at.date_naive();
+    let end_date = tz_aware_sessions.last().unwrap().left_at.date_naive();
 
     let result_len = (end_date - begin_date).num_days() as usize + 1;
     let mut result = vec![None; result_len];
@@ -179,18 +199,17 @@ fn sessions_to_duration_progress(tz_aware_sessions: &[TzAwareSession]) -> Option
         let cursor_end = session.left_at;
 
         loop {
-            let finish = cursor_begin.date() == cursor_end.date();
+            let finish = cursor_begin.date_naive() == cursor_end.date_naive();
 
             let delta_this_day = {
                 if finish {
                     cursor_end - cursor_begin
                 } else {
-                    let end_of_day = cursor_begin.date().and_hms(23, 59, 59);
-                    end_of_day - cursor_begin
+                    next_day(cursor_begin) - cursor_begin
                 }
             };
 
-            let index = (cursor_begin.date() - begin_date).num_days() as usize;
+            let index = (cursor_begin.date_naive() - begin_date).num_days() as usize;
 
             if result[index].is_none() {
                 fill_from_last_some(&mut result, index);
@@ -203,7 +222,7 @@ fn sessions_to_duration_progress(tz_aware_sessions: &[TzAwareSession]) -> Option
                 break;
             }
 
-            cursor_begin = cursor_begin.date().succ().and_hms(0, 0, 0);
+            cursor_begin = next_day(cursor_begin)
         }
     }
 
@@ -215,6 +234,49 @@ fn sessions_to_duration_progress(tz_aware_sessions: &[TzAwareSession]) -> Option
             .map(|x| x.expect("fill_from_last_some did not actually filled"))
             .collect(),
     )
+}
+
+#[test]
+fn test_sessions_to_duration_progress() {
+    macro_rules! sessions {
+        ($($d1:literal $h1:literal:$m1:literal:$s1:literal -> $d2:literal $h2:literal:$m2:literal:$s2:literal),*$(,)?) => {
+           [$(TzAwareSession {
+                user_id: 0,
+                joined_at: Tokyo.with_ymd_and_hms(2023, 1, $d1, $h1, $m1, $s1).unwrap(),
+                left_at: Tokyo.with_ymd_and_hms(2023, 1, $d2, $h2, $m2, $s2).unwrap(),
+            }),*]
+        };
+    }
+    assert_eq!(sessions_to_duration_progress(&[]), None,);
+    assert_eq!(
+        sessions_to_duration_progress(&sessions! { 11 0:0:0 -> 11 1:0:0, }),
+        Some(vec![Duration::hours(1)])
+    );
+    assert_eq!(
+        sessions_to_duration_progress(&sessions! {
+            11 0:0:0 -> 11 1:0:0,
+            11 4:0:0 -> 11 5:0:0,
+            12 0:0:0 -> 12 3:30:0,
+        }),
+        Some(vec![
+            Duration::hours(2),
+            Duration::minutes(60 * (2 + 3) + 30)
+        ])
+    );
+    assert_eq!(
+        sessions_to_duration_progress(&sessions! {
+            11 22:0:0 -> 12 4:0:0,
+            14 1:0:0 -> 16 4:0:0,
+        }),
+        Some(vec![
+            Duration::hours(2),
+            Duration::hours(2 + 4),
+            Duration::hours(2 + 4),
+            Duration::hours(2 + 4 + 23),
+            Duration::hours(2 + 4 + 23 + 24),
+            Duration::hours(2 + 4 + 23 + 24 + 4),
+        ])
+    );
 }
 
 // Suppose we have

@@ -13,21 +13,21 @@ impl Plotter for Plotters {
 
         let mut buffer = vec![0; SIZE.0 * SIZE.1 * 3];
 
-        let root = BitMapBackend::with_buffer(&mut buffer, (SIZE.0 as u32, SIZE.1 as u32))
-            .into_drawing_area();
+        let root =
+            BitMapBackend::with_buffer(&mut buffer, (SIZE.0 as _, SIZE.1 as _)).into_drawing_area();
         root.fill(&WHITE).context("failed to fill buffer")?;
 
-        let x_range = 0f64..data.first().context("no data in `data`")?.1.len() as f64;
-        let y_range = 0f64..(*data
+        let x_range = 0.0..data.first().context("no data in `data`")?.1.len() as f64;
+        let y_range = 0.0..(*data
             .iter()
             .flat_map(|x| x.1.last())
             .max_by_key(|&&x| OrderedFloat(x))
             .context("no data in `data")?);
 
         let mut chart = ChartBuilder::on(&root)
-            .margin(20u32)
-            .x_label_area_size(40u32)
-            .y_label_area_size(60u32)
+            .margin(20)
+            .x_label_area_size(40)
+            .y_label_area_size(60)
             .build_cartesian_2d(x_range, y_range)
             .context("failed to build chart")?;
 

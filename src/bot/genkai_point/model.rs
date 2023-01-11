@@ -102,8 +102,8 @@ fn hour_to_point(hour: u32) -> u64 {
 macro_rules! datetime {
     ($y1:literal/$M1:literal/$d1:literal $h1:literal:$m1:literal:$s1:literal) => {
         Tokyo
-            .ymd($y1, $M1, $d1)
-            .and_hms($h1, $m1, $s1)
+            .with_ymd_and_hms($y1, $M1, $d1, $h1, $m1, $s1)
+            .unwrap()
             .with_timezone(&Utc)
     };
 }
