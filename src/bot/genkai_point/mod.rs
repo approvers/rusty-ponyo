@@ -184,7 +184,7 @@ impl<D: GenkaiPointDatabase> GenkaiPointBot<D> {
         );
 
         #[cfg(not(any(feature = "plot_plotters", feature = "plot_matplotlib")))]
-        compile_error!("You must enable discord_client or console_client feature.");
+        compile_error!("You must enable plot_plotters or plot_matplotlib feature.");
 
         let image = plot::plot(&self.db, ctx, plotter, n as _).await?;
 

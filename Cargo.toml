@@ -17,7 +17,7 @@ plot_plotters = ["plotters", "ordered-float", "png"]
 dev = ["memory_db", "console_client", "plot_plotters"]
 prod = ["mongo_db", "discord_client", "plot_plotters"]
 
-default = ["prod", "plot_plotters"]
+default = ["prod"]
 
 [dependencies]
 anyhow = "1"

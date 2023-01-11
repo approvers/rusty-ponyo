@@ -1,45 +1,59 @@
-FROM rust:slim-buster as base
+from rust:slim-buster as base
+env NETTLE_STATIC=yes
+workdir /src
 
-RUN apt-get update && \
+run apt-get update && \
     apt-get install -y \
-        clang \
-        cmake \
-        llvm \
-        nettle-dev \
-        libfreetype6-dev \
-        libfontconfig1-dev && \
+    clang \
+    cmake \
+    llvm \
+    nettle-dev \
+    libfreetype6-dev \
+    libfontconfig1-dev && \
     rm -rf /var/lib/apt/lists/*
 
-WORKDIR /src
-COPY . /src/
+copy rust-toolchain.toml .
+run cargo install cargo-chef --locked
 
-ENV NETTLE_STATIC=yes
+# ---
 
-RUN --mount=type=cache,target=/root/.cargo/ \
-    --mount=type=cache,target=/src/target \
-    cargo build --release --no-default-features --features "prod" && \
+from base as plan
+
+copy . .
+run cargo chef prepare --recipe-path recipe.json
+
+# ---
+
+from base as build
+
+copy --from=plan /src/recipe.json .
+run cargo chef cook --recipe-path recipe.json --release --no-default-features --features prod
+
+copy . .
+run cargo build --release --no-default-features --features prod && \
     cp /src/target/release/rusty-ponyo /
 
+# ---
 
-FROM debian:buster-slim
+from debian:buster-slim
 
-RUN apt-get update && \
+run apt-get update && \
     apt-get install -y \
-        libfreetype6 \
-        libfontconfig1 \
-        fonts-noto-cjk && \
+    libfreetype6 \
+    libfontconfig1 \
+    fonts-noto-cjk && \
     rm -rf /var/lib/apt/lists/*
 
-RUN echo '<?xml version="1.0"?>\
-<!DOCTYPE fontconfig SYSTEM "fonts.dtd">\
-<fontconfig>\
+run echo '<?xml version="1.0"?>\
+    <!DOCTYPE fontconfig SYSTEM "fonts.dtd">\
+    <fontconfig>\
     <match target="pattern">\
-        <test name="family" qual="any"><string>sans-serif</string></test>\
-        <edit name="family" mode="prepend" binding="same"><string>Noto Sans CJK JP</string></edit>\
+    <test name="family" qual="any"><string>sans-serif</string></test>\
+    <edit name="family" mode="prepend" binding="same"><string>Noto Sans CJK JP</string></edit>\
     </match>\
-</fontconfig>' > /etc/fonts/local.conf
+    </fontconfig>' > /etc/fonts/local.conf
 
 
-COPY --from=base /rusty-ponyo /
+copy --from=build /rusty-ponyo /
 
-CMD ["/rusty-ponyo"]
+cmd ["/rusty-ponyo"]
