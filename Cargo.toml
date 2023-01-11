@@ -11,7 +11,7 @@ console_client = []
 mongo_db = ["mongodb", "tokio-stream"]
 memory_db = []
 
-plot_matplitlib = ["inline-python"]
+plot_matplotlib = ["inline-python"]
 plot_plotters = ["plotters", "ordered-float", "png"]
 
 dev = ["memory_db", "console_client", "plot_plotters"]
