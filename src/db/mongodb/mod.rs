@@ -1,22 +1,27 @@
 mod model;
-
 use {
     crate::{
         bot::{
             alias::{model::MessageAlias, MessageAliasDatabase},
             auth::GenkaiAuthDatabase,
             genkai_point::{model::Session, CreateNewSessionResult, GenkaiPointDatabase},
+            meigen::{
+                self,
+                model::{Meigen, MeigenId},
+                MeigenDatabase,
+            },
         },
-        db::mongodb::model::{GenkaiAuthData, MongoMessageAlias, MongoSession},
+        db::mongodb::model::{GenkaiAuthData, MongoMeigen, MongoMessageAlias, MongoSession},
     },
     anyhow::{bail, Context as _, Result},
     async_trait::async_trait,
     chrono::{DateTime, Duration, Utc},
     mongodb::{
-        bson::{self, doc, oid::ObjectId},
+        bson::{self, doc, oid::ObjectId, Document},
         options::{ClientOptions, FindOneAndUpdateOptions},
-        Client, Database,
+        Client, Collection, Database,
     },
+    serde::{de::DeserializeOwned, Deserialize},
     tokio_stream::StreamExt,
 };
 
@@ -40,6 +45,9 @@ impl MongoDb {
 }
 
 const MESSAGE_ALIAS_COLLECTION_NAME: &str = "MessageAlias";
+const GENKAI_POINT_COLLECTION_NAME: &str = "GenkaiPoint";
+const GENKAI_AUTH_COLLECTION_NAME: &str = "GenkaiAuth";
+const MEIGEN_COLLECTION_NAME: &str = "Meigen";
 
 #[async_trait]
 impl MessageAliasDatabase for MongoDb {
@@ -125,8 +133,6 @@ impl MessageAliasDatabase for MongoDb {
             .context("failed to decode document")
     }
 }
-
-const GENKAI_POINT_COLLECTION_NAME: &str = "GenkaiPoint";
 
 #[derive(serde::Deserialize)]
 
@@ -330,8 +336,6 @@ impl GenkaiPointDatabase for MongoDb {
     }
 }
 
-const GENKAI_AUTH_COLLECTION_NAME: &str = "GenkaiAuth";
-
 #[async_trait]
 impl GenkaiAuthDatabase for MongoDb {
     async fn register_pgp_key(&self, user_id: u64, key: &str) -> Result<()> {
@@ -408,6 +412,181 @@ impl GenkaiAuthDatabase for MongoDb {
             .await
             .context("failed to find pgp key")
             .map(|x| x.and_then(|x| x.token))
+    }
+}
+
+impl MongoDb {
+    async fn aggregate_one<T: DeserializeOwned>(
+        &self,
+        collection: &Collection<impl Sized>, // we don't care about what collection have.
+        pipeline: impl IntoIterator<Item = Document>,
+    ) -> Result<T> {
+        let doc = collection
+            .aggregate(pipeline, None)
+            .await
+            .context("failed to aggregate")?
+            .next()
+            .await
+            .context("aggregate returned nothing")?
+            .context("failed to decode aggregated document")?;
+        bson::from_document(doc).context("failed to deserialize query result")
+    }
+}
+
+#[async_trait]
+impl MeigenDatabase for MongoDb {
+    async fn save(
+        &self,
+        author: impl Into<String> + Send,
+        content: impl Into<String> + Send,
+    ) -> Result<Meigen> {
+        let author = author.into();
+        let content = content.into();
+
+        #[derive(Deserialize)]
+        struct QueryResponse {
+            current_id: MeigenId,
+        }
+
+        let collection = self.inner.collection::<MongoMeigen>(MEIGEN_COLLECTION_NAME);
+
+        // FIXME: id shouldn't be decided with this method.
+        // should be: https://www.mongodb.com/basics/mongodb-auto-increment
+        let current_id = self
+            .aggregate_one::<QueryResponse>(
+                &collection,
+                [doc! {
+                    "$group": {
+                        "_id": "",
+                        "current_id": {
+                            "$max": "$id"
+                        }
+                    }
+                }],
+            )
+            .await?
+            .current_id;
+
+        let meigen = Meigen {
+            id: current_id.succ(),
+            author,
+            content,
+            loved_user_id: vec![],
+        };
+
+        collection
+            .insert_one(MongoMeigen::from_model(meigen.clone()), None)
+            .await
+            .context("failed to insert document")?;
+
+        Ok(meigen)
+    }
+
+    async fn load(&self, id: MeigenId) -> Result<Option<Meigen>> {
+        let Some(d) = self.inner
+            .collection::<MongoMeigen>(MEIGEN_COLLECTION_NAME)
+            .find_one(doc! { "id": id.0 }, None)
+            .await.context("failed to find meigen")? else { return Ok(None) };
+
+        Ok(Some(
+            d.into_model()
+                .context("failed to convert meigen to model")?,
+        ))
+    }
+
+    async fn delete(&self, id: MeigenId) -> Result<bool> {
+        self.inner
+            .collection::<MongoMeigen>(MEIGEN_COLLECTION_NAME)
+            .delete_one(doc! { "id": id.0 }, None)
+            .await
+            .context("failed to delete meigen")
+            .map(|x| x.deleted_count == 1)
+    }
+
+    async fn search(&self, options: meigen::FindOptions<'_>) -> Result<Vec<Meigen>> {
+        let meigen::FindOptions {
+            author,
+            content,
+            offset,
+            limit,
+            random,
+        } = options;
+
+        let mut pipeline = vec![
+            {
+                let into_regex = |x| doc! { "$regex": format!(".*{}.*", regex::escape(x)) };
+                let mut doc = Document::new();
+                if let Some(author) = author {
+                    doc.insert("author", into_regex(author));
+                }
+                if let Some(content) = content {
+                    doc.insert("content", into_regex(content));
+                }
+                doc! { "$match": doc } // { $match: {} } is fine, it just matches to any document.
+            },
+            doc! { "$sort": { "id": -1 } },
+            doc! { "$skip": offset },
+        ];
+
+        if random {
+            pipeline.extend([
+                doc! { "$sample": { "size": limit as u32 } }, // sample pipeline scrambles document order.
+                doc! { "$sort": { "id": -1 } },
+            ]);
+        } else {
+            pipeline.push(doc! { "$limit": limit as u32 });
+        }
+
+        self.inner
+            .collection::<MongoMeigen>(MEIGEN_COLLECTION_NAME)
+            .aggregate(pipeline, None)
+            .await
+            .context("failed to aggregate")?
+            .map(|x| x.context("failed to decode document"))
+            .map(|x| bson::from_document(x?).context("failed to deserialize document"))
+            .map(|x| MongoMeigen::into_model(x?))
+            .collect()
+            .await
+    }
+
+    async fn count(&self) -> Result<u32> {
+        #[derive(Deserialize)]
+        struct QueryResponse {
+            id: i32,
+        }
+
+        let collection = self.inner.collection::<MongoMeigen>(MEIGEN_COLLECTION_NAME);
+
+        Ok(self
+            .aggregate_one::<QueryResponse>(&collection, [doc! { "$count": "id" }])
+            .await?
+            .id as u32)
+    }
+
+    async fn append_loved_user(&self, id: MeigenId, loved_user_id: u64) -> Result<bool> {
+        self.inner
+            .collection::<MongoMeigen>(MEIGEN_COLLECTION_NAME)
+            .update_one(
+                doc! { "id": id.0 },
+                doc! { "$addToSet": { "loved_user_id": loved_user_id.to_string() } },
+                None,
+            )
+            .await
+            .context("failed to append loved user id")
+            .map(|x| x.modified_count == 1)
+    }
+
+    async fn remove_loved_user(&self, id: MeigenId, loved_user_id: u64) -> Result<bool> {
+        self.inner
+            .collection::<MongoMeigen>(MEIGEN_COLLECTION_NAME)
+            .update_one(
+                doc! { "id": id.0 },
+                doc! { "$pull": { "loved_user_id": loved_user_id.to_string() } },
+                None,
+            )
+            .await
+            .context("failed to remove loved user id")
+            .map(|x| x.modified_count == 1)
     }
 }
 
