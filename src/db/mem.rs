@@ -8,6 +8,7 @@ use {
             model::{Meigen, MeigenId},
             MeigenDatabase,
         },
+        IsUpdated,
     },
     anyhow::{anyhow, Context as _, Result},
     async_trait::async_trait,
@@ -101,7 +102,7 @@ impl MessageAliasDatabase for MemoryDB {
         e
     }
 
-    async fn delete(&self, key: &str) -> Result<bool> {
+    async fn delete(&self, key: &str) -> Result<IsUpdated> {
         let mut me = self.inner().await;
         let index = me.aliases.iter().position(|x| x.key == key);
 
@@ -319,7 +320,7 @@ impl MeigenDatabase for MemoryDB {
             .cloned())
     }
 
-    async fn delete(&self, id: MeigenId) -> Result<bool> {
+    async fn delete(&self, id: MeigenId) -> Result<IsUpdated> {
         let mut inner = self.inner().await;
         let Some(index) = inner.meigens.iter().position(|x| x.id == id)
             else { return Ok(false) };
@@ -354,7 +355,7 @@ impl MeigenDatabase for MemoryDB {
         Ok(self.inner().await.meigens.len() as u32)
     }
 
-    async fn append_loved_user(&self, id: MeigenId, loved_user_id: u64) -> Result<bool> {
+    async fn append_loved_user(&self, id: MeigenId, loved_user_id: u64) -> Result<IsUpdated> {
         let mut inner = self.inner().await;
         let Some(meigen) = inner.meigens.iter_mut().find(|x| x.id == id)
             else { return Ok(false) };
@@ -367,7 +368,7 @@ impl MeigenDatabase for MemoryDB {
         Ok(true)
     }
 
-    async fn remove_loved_user(&self, id: MeigenId, loved_user_id: u64) -> Result<bool> {
+    async fn remove_loved_user(&self, id: MeigenId, loved_user_id: u64) -> Result<IsUpdated> {
         let mut inner = self.inner().await;
         let Some(meigen) = inner.meigens.iter_mut().find(|x| x.id == id)
             else { return Ok(false) };

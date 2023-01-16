@@ -1,4 +1,5 @@
 mod model;
+
 use {
     crate::{
         bot::{
@@ -10,6 +11,7 @@ use {
                 model::{Meigen, MeigenId},
                 MeigenDatabase,
             },
+            IsUpdated,
         },
         db::mongodb::model::{GenkaiAuthData, MongoMeigen, MongoMessageAlias, MongoSession},
     },
@@ -105,7 +107,7 @@ impl MessageAliasDatabase for MongoDb {
             .map(|x| x as u32)
     }
 
-    async fn delete(&self, key: &str) -> Result<bool> {
+    async fn delete(&self, key: &str) -> Result<IsUpdated> {
         self.inner
             .collection::<MongoMessageAlias>(MESSAGE_ALIAS_COLLECTION_NAME)
             .delete_one(doc! { "key": key }, None)
@@ -494,7 +496,7 @@ impl MeigenDatabase for MongoDb {
         ))
     }
 
-    async fn delete(&self, id: MeigenId) -> Result<bool> {
+    async fn delete(&self, id: MeigenId) -> Result<IsUpdated> {
         self.inner
             .collection::<MongoMeigen>(MEIGEN_COLLECTION_NAME)
             .delete_one(doc! { "id": id.0 }, None)
@@ -563,7 +565,7 @@ impl MeigenDatabase for MongoDb {
             .id as u32)
     }
 
-    async fn append_loved_user(&self, id: MeigenId, loved_user_id: u64) -> Result<bool> {
+    async fn append_loved_user(&self, id: MeigenId, loved_user_id: u64) -> Result<IsUpdated> {
         self.inner
             .collection::<MongoMeigen>(MEIGEN_COLLECTION_NAME)
             .update_one(
@@ -576,7 +578,7 @@ impl MeigenDatabase for MongoDb {
             .map(|x| x.modified_count == 1)
     }
 
-    async fn remove_loved_user(&self, id: MeigenId, loved_user_id: u64) -> Result<bool> {
+    async fn remove_loved_user(&self, id: MeigenId, loved_user_id: u64) -> Result<IsUpdated> {
         self.inner
             .collection::<MongoMeigen>(MEIGEN_COLLECTION_NAME)
             .update_one(

@@ -1,5 +1,5 @@
 use {
-    crate::bot::{parse_command, ui, BotService, Context, Message},
+    crate::bot::{parse_command, ui, BotService, Context, IsUpdated, Message},
     anyhow::{Context as _, Result},
     async_trait::async_trait,
     model::{Meigen, MeigenId},
@@ -24,11 +24,11 @@ pub trait MeigenDatabase: Send + Sync {
         content: impl Into<String> + Send,
     ) -> Result<Meigen>;
     async fn load(&self, id: MeigenId) -> Result<Option<Meigen>>;
-    async fn delete(&self, id: MeigenId) -> Result<bool>;
+    async fn delete(&self, id: MeigenId) -> Result<IsUpdated>;
     async fn search(&self, options: FindOptions<'_>) -> Result<Vec<Meigen>>;
     async fn count(&self) -> Result<u32>;
-    async fn append_loved_user(&self, id: MeigenId, loved_user_id: u64) -> Result<bool>;
-    async fn remove_loved_user(&self, id: MeigenId, loved_user_id: u64) -> Result<bool>;
+    async fn append_loved_user(&self, id: MeigenId, loved_user_id: u64) -> Result<IsUpdated>;
+    async fn remove_loved_user(&self, id: MeigenId, loved_user_id: u64) -> Result<IsUpdated>;
 }
 
 const NAME: &str = "rusty_ponyo::bot::meigen";
