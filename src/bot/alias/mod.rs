@@ -24,9 +24,6 @@ ui! {
 
 #[derive(Debug, clap::Subcommand)]
 enum Command {
-    /// ヘルプメッセージを出します
-    Help,
-
     /// 表示回数が多い順のランキングを出します
     Ranking,
 
@@ -116,8 +113,6 @@ impl<D: MessageAliasDatabase> MessageAliasBot<D> {
             else { return Ok(None) };
 
         match parsed.command {
-            // help command should be handled automatically by clap
-            Command::Help => Ok(None),
             Command::Status => Ok(Some(status(&self.db).await?)),
             Command::Ranking => Ok(Some(usage_ranking(&self.db).await?)),
 

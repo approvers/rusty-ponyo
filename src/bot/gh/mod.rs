@@ -29,9 +29,6 @@ ui! {
 
 #[derive(Debug, clap::Subcommand)]
 enum Command {
-    /// ヘルプメッセージを出します
-    Help,
-
     /// 指定されたリンクのプレビューを生成します。
     Preview {
         /// コードのリンク
@@ -68,9 +65,6 @@ impl GitHubCodePreviewBot {
             else { return Ok(()) };
 
         match parsed.command {
-            // handled by clap
-            Help => Ok(()),
-
             Preview { url } => {
                 let preview_result = self.gen_preview(&url).await;
 
