@@ -8,6 +8,7 @@ pub mod alias;
 pub mod auth;
 pub mod genkai_point;
 pub mod gh;
+pub mod meigen;
 pub mod vc_diff;
 
 pub(crate) trait Message: Send + Sync {
