@@ -21,9 +21,6 @@ ui! {
 
 #[derive(Debug, clap::Subcommand)]
 enum Command {
-    /// ヘルプメッセージを出します
-    Help,
-
     /// 機能を有効化します
     Enable,
 
@@ -103,9 +100,6 @@ impl BotService for VcDiffBot {
         use Command::*;
 
         let msg = match parsed.command {
-            // handled by clap
-            Help => return Ok(()),
-
             Enable => {
                 *self.enabled.lock().await = true;
                 "vcdiff を有効化しました"

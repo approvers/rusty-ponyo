@@ -29,9 +29,6 @@ ui! {
 
 #[derive(Debug, clap::Subcommand)]
 enum Command {
-    /// ヘルプメッセージを出します
-    Help,
-
     Set {
         #[clap(subcommand)]
         what: SetCommand,
@@ -83,9 +80,6 @@ impl<D: GenkaiAuthDatabase> BotService for GenkaiAuthBot<D> {
             else { return Ok(()) };
 
         match parsed.command {
-            // help command should be handled automatically by clap
-            Command::Help => {}
-
             Command::Set {
                 what: SetCommand::Pgp { src_url },
             } => self.set_pgp(msg, ctx, &src_url).await?,

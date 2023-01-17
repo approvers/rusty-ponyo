@@ -3,7 +3,7 @@ pub(crate) mod model;
 
 use {
     crate::bot::{
-        alias::model::MessageAlias, parse_command, ui, BotService, Context, Message,
+        alias::model::MessageAlias, parse_command, ui, BotService, Context, IsUpdated, Message,
         SendAttachment, SendMessage,
     },
     anyhow::Result,
@@ -24,9 +24,6 @@ ui! {
 
 #[derive(Debug, clap::Subcommand)]
 enum Command {
-    /// ヘルプメッセージを出します
-    Help,
-
     /// 表示回数が多い順のランキングを出します
     Ranking,
 
@@ -58,7 +55,7 @@ pub(crate) trait MessageAliasDatabase: Send + Sync {
     async fn save(&self, alias: MessageAlias) -> Result<()>;
     async fn get(&self, key: &str) -> Result<Option<MessageAlias>>;
     async fn get_and_increment_usage_count(&self, key: &str) -> Result<Option<MessageAlias>>;
-    async fn delete(&self, key: &str) -> Result<bool>;
+    async fn delete(&self, key: &str) -> Result<IsUpdated>;
     async fn len(&self) -> Result<u32>;
     async fn usage_count_top_n(&self, n: usize) -> Result<Vec<MessageAlias>>;
 }
@@ -116,8 +113,6 @@ impl<D: MessageAliasDatabase> MessageAliasBot<D> {
             else { return Ok(None) };
 
         match parsed.command {
-            // help command should be handled automatically by clap
-            Command::Help => Ok(None),
             Command::Status => Ok(Some(status(&self.db).await?)),
             Command::Ranking => Ok(Some(usage_ranking(&self.db).await?)),
 

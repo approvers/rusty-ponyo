@@ -3,10 +3,17 @@ use {
         alias::{model::MessageAlias, MessageAliasDatabase},
         auth::GenkaiAuthDatabase,
         genkai_point::{model::Session, CreateNewSessionResult, GenkaiPointDatabase},
+        meigen::{
+            self,
+            model::{Meigen, MeigenId},
+            MeigenDatabase,
+        },
+        IsUpdated,
     },
     anyhow::{anyhow, Context as _, Result},
     async_trait::async_trait,
     chrono::{DateTime, Duration, Utc},
+    rand::seq::SliceRandom,
     serde::Serialize,
     std::{
         collections::HashMap,
@@ -21,6 +28,7 @@ struct MemoryDBInner {
     aliases: Vec<MessageAlias>,
     sessions: Vec<Session>,
     auth_entries: HashMap<u64, AuthEntry>,
+    meigens: Vec<Meigen>,
 }
 
 pub(crate) struct MemoryDB(Arc<Mutex<MemoryDBInner>>);
@@ -37,6 +45,7 @@ impl MemoryDB {
             aliases: vec![],
             sessions: vec![],
             auth_entries: HashMap::new(),
+            meigens: vec![],
         })))
     }
 
@@ -93,7 +102,7 @@ impl MessageAliasDatabase for MemoryDB {
         e
     }
 
-    async fn delete(&self, key: &str) -> Result<bool> {
+    async fn delete(&self, key: &str) -> Result<IsUpdated> {
         let mut me = self.inner().await;
         let index = me.aliases.iter().position(|x| x.key == key);
 
@@ -274,5 +283,99 @@ impl GenkaiAuthDatabase for MemoryDB {
             .auth_entries
             .get(&user_id)
             .and_then(|x| x.token.clone()))
+    }
+}
+
+#[async_trait]
+impl MeigenDatabase for MemoryDB {
+    async fn save(
+        &self,
+        author: impl Into<String> + Send,
+        content: impl Into<String> + Send,
+    ) -> Result<Meigen> {
+        let author = author.into();
+        let content = content.into();
+
+        let mut inner = self.inner().await;
+        let current_id = inner.meigens.iter().map(|x| x.id.0).max().unwrap_or(0);
+        let meigen = Meigen {
+            id: MeigenId(current_id).succ(),
+            author,
+            content,
+            loved_user_id: vec![],
+        };
+
+        inner.meigens.push(meigen.clone());
+
+        Ok(meigen)
+    }
+
+    async fn load(&self, id: MeigenId) -> Result<Option<Meigen>> {
+        Ok(self
+            .inner()
+            .await
+            .meigens
+            .iter()
+            .find(|x| x.id == id)
+            .cloned())
+    }
+
+    async fn delete(&self, id: MeigenId) -> Result<IsUpdated> {
+        let mut inner = self.inner().await;
+        let Some(index) = inner.meigens.iter().position(|x| x.id == id)
+            else { return Ok(false) };
+
+        inner.meigens.remove(index);
+
+        Ok(true)
+    }
+
+    async fn search(&self, options: meigen::FindOptions<'_>) -> Result<Vec<Meigen>> {
+        let inner = self.inner().await;
+        let mut meigens = inner
+            .meigens
+            .iter()
+            .filter(|x| {
+                options.author.map_or(true, |a| x.author.contains(a))
+                    && options.content.map_or(true, |c| x.content.contains(c))
+            })
+            .collect::<Vec<_>>();
+        if options.random {
+            meigens.shuffle(&mut rand::thread_rng());
+        }
+        Ok(meigens
+            .into_iter()
+            .skip(options.offset as usize)
+            .take(options.limit as usize)
+            .cloned()
+            .collect())
+    }
+
+    async fn count(&self) -> Result<u32> {
+        Ok(self.inner().await.meigens.len() as u32)
+    }
+
+    async fn append_loved_user(&self, id: MeigenId, loved_user_id: u64) -> Result<IsUpdated> {
+        let mut inner = self.inner().await;
+        let Some(meigen) = inner.meigens.iter_mut().find(|x| x.id == id)
+            else { return Ok(false) };
+
+        if meigen.loved_user_id.contains(&loved_user_id) {
+            return Ok(false);
+        }
+
+        meigen.loved_user_id.push(loved_user_id);
+        Ok(true)
+    }
+
+    async fn remove_loved_user(&self, id: MeigenId, loved_user_id: u64) -> Result<IsUpdated> {
+        let mut inner = self.inner().await;
+        let Some(meigen) = inner.meigens.iter_mut().find(|x| x.id == id)
+            else { return Ok(false) };
+        let Some(index) = meigen.loved_user_id.iter().position(|&x| x == loved_user_id)
+            else { return Ok(false) };
+
+        meigen.loved_user_id.swap_remove(index);
+        Ok(true)
     }
 }

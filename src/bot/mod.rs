@@ -4,10 +4,14 @@ use {
     std::{future::Future, pin::Pin},
 };
 
+/// 変更が生じた場合 true
+pub type IsUpdated = bool;
+
 pub mod alias;
 pub mod auth;
 pub mod genkai_point;
 pub mod gh;
+pub mod meigen;
 pub mod vc_diff;
 
 pub(crate) trait Message: Send + Sync {
@@ -130,7 +134,7 @@ macro_rules! ui {
     ) => {
         $(#[$meta])*
         #[derive(Debug, clap::Args)]
-        #[clap(name=$bot_name, about, long_about=None)]
+        #[clap(name=$bot_name, about, version, long_about=None)]
         struct $name {
             #[clap(subcommand)]
             command: $command,

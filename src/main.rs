@@ -12,6 +12,7 @@ use {
         gh::GitHubCodePreviewBot, vc_diff::VcDiffBot,
     },
     anyhow::{Context as _, Result},
+    bot::meigen::MeigenBot,
 };
 
 #[rustfmt::skip]
@@ -36,14 +37,14 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt().with_ansi(use_ansi).init();
 
     #[cfg(feature = "memory_db")]
-    let db = crate::db::mem::MemoryDB::new();
+    let local_db = crate::db::mem::MemoryDB::new();
     #[cfg(feature = "memory_db")]
-    let auth_db = db.clone();
+    let remote_db = local_db.clone();
 
     #[cfg(feature = "mongo_db")]
-    let db = crate::db::mongodb::MongoDb::new(&env_var("MONGODB_URI")?).await?;
+    let local_db = crate::db::mongodb::MongoDb::new(&env_var("MONGODB_URI")?).await?;
     #[cfg(feature = "mongo_db")]
-    let auth_db = crate::db::mongodb::MongoDb::new(&env_var("MONGO_AUTH_DB_URI")?).await?;
+    let remote_db = crate::db::mongodb::MongoDb::new(&env_var("MONGODB_ATLAS_URI")?).await?;
 
     #[cfg(feature = "console_client")]
     let mut client = crate::client::console::ConsoleClient::new();
@@ -56,10 +57,11 @@ async fn main() -> Result<()> {
         .collect();
 
     client
-        .add_service(MessageAliasBot::new(db.clone()))
-        .add_service(GenkaiPointBot::new(db.clone()))
+        .add_service(MessageAliasBot::new(local_db.clone()))
+        .add_service(GenkaiPointBot::new(local_db.clone()))
         .add_service(GitHubCodePreviewBot)
-        .add_service(GenkaiAuthBot::new(auth_db, pgp_whitelist))
+        .add_service(GenkaiAuthBot::new(remote_db.clone(), pgp_whitelist))
+        .add_service(MeigenBot::new(remote_db))
         .add_service(VcDiffBot::new());
 
     #[cfg(feature = "console_client")]

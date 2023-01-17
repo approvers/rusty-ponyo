@@ -29,9 +29,6 @@ ui! {
 
 #[derive(Debug, clap::Subcommand)]
 enum Command {
-    /// ヘルプメッセージを出します
-    Help,
-
     /// ユーザーの限界ポイント情報を出します
     Show {
         /// 表示するユーザーのID
@@ -281,9 +278,6 @@ impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
             else { return Ok(()) };
 
         match parsed.command {
-            // help command should be handled automatically by clap
-            Command::Help => {}
-
             Command::Show { user_id } => {
                 self.show(ctx, user_id.unwrap_or_else(|| msg.author().id()))
                     .await?;
