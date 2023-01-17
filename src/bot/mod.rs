@@ -60,6 +60,7 @@ pub(crate) trait Context: Send + Sync {
     async fn send_message(&self, msg: SendMessage<'_>) -> Result<()>;
     async fn get_user_name(&self, user_id: u64) -> Result<String>;
 
+    #[must_use("Futures do nothing unless polled")]
     fn send_text_message<'a>(
         &'a self,
         text: &'a str,

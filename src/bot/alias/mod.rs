@@ -81,20 +81,8 @@ impl<D: MessageAliasDatabase> BotService for MessageAliasBot<D> {
             }
         }
 
-        if let Some(registered_alias) = self.db.get_and_increment_usage_count(msg.content()).await?
-        {
-            ctx.send_message(SendMessage {
-                content: &registered_alias.message,
-                attachments: &registered_alias
-                    .attachments
-                    .iter()
-                    .map(|x| SendAttachment {
-                        name: &x.name,
-                        data: &x.data,
-                    })
-                    .collect::<Vec<_>>(),
-            })
-            .await?;
+        if let Some(alias) = self.db.get_and_increment_usage_count(msg.content()).await? {
+            self.send_alias(ctx, &alias).await?;
         }
 
         Ok(())
@@ -107,30 +95,39 @@ impl<D: MessageAliasDatabase> MessageAliasBot<D> {
     }
 
     async fn on_command(&self, message: &dyn Message, ctx: &dyn Context) -> Result<Option<String>> {
-        use command::*;
-
         let Some(parsed) = parse_command::<Ui>(message.content(), ctx).await?
             else { return Ok(None) };
 
         match parsed.command {
-            Command::Status => Ok(Some(status(&self.db).await?)),
-            Command::Ranking => Ok(Some(usage_ranking(&self.db).await?)),
+            Command::Status => Ok(Some(self.status().await?)),
+            Command::Ranking => Ok(Some(self.usage_ranking().await?)),
 
-            Command::Delete { key } => delete(&self.db, &key).await.map(Some),
+            Command::Delete { key } => self.delete(&key).await.map(Some),
 
             Command::Make {
                 key,
                 message: text,
                 force,
-            } => make(
-                &self.db,
-                &key,
-                text.as_deref(),
-                message.attachments(),
-                force,
-            )
-            .await
-            .map(Some),
+            } => {
+                self.make(ctx, &key, text.as_deref(), message.attachments(), force)
+                    .await?;
+                Ok(None)
+            }
         }
+    }
+
+    async fn send_alias(&self, ctx: &dyn Context, alias: &MessageAlias) -> Result<()> {
+        ctx.send_message(SendMessage {
+            content: &alias.message,
+            attachments: &alias
+                .attachments
+                .iter()
+                .map(|x| SendAttachment {
+                    name: &x.name,
+                    data: &x.data,
+                })
+                .collect::<Vec<_>>(),
+        })
+        .await
     }
 }
