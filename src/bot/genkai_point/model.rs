@@ -2,6 +2,7 @@ use {
     anyhow::{bail, Result},
     chrono::{DateTime, Duration, Timelike, Utc},
     chrono_tz::Asia::Tokyo,
+    ordered_float::NotNan,
     serde::{Deserialize, Serialize},
 };
 
@@ -9,12 +10,12 @@ use {
 pub(crate) const GENKAI_POINT_MIN: u64 = 0;
 pub(crate) const GENKAI_POINT_MAX: u64 = 10;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) struct UserStat {
     pub(crate) user_id: u64,
     pub(crate) genkai_point: u64,
     pub(crate) total_vc_duration: Duration,
-    pub(crate) efficiency: f64,
+    pub(crate) efficiency: NotNan<f64>,
 }
 
 impl UserStat {
@@ -23,32 +24,35 @@ impl UserStat {
             return Ok(None);
         }
 
-        let mut result = UserStat {
-            user_id: sessions[0].user_id,
-            genkai_point: 0,
-            total_vc_duration: Duration::seconds(0),
-            efficiency: 0.0,
-        };
+        let user_id = sessions[0].user_id;
+        let mut genkai_point = 0;
+        let mut total_vc_duration = Duration::seconds(0);
 
         for session in sessions {
-            if result.user_id != session.user_id {
+            if user_id != session.user_id {
                 bail!("list contains different user's session");
             }
 
-            result.genkai_point += session.calc_point();
+            genkai_point += session.calc_point();
 
             // chrono::Duration has no AddAssign implementation.
-            result.total_vc_duration = result.total_vc_duration + session.duration();
+            total_vc_duration = total_vc_duration + session.duration();
         }
 
-        result.efficiency = (result.genkai_point as f64 / GENKAI_POINT_MAX as f64)
-            / (result.total_vc_duration.num_minutes() as f64 / 60.0);
+        let mut efficiency = (genkai_point as f64 / GENKAI_POINT_MAX as f64)
+            / (total_vc_duration.num_minutes() as f64 / 60.0);
 
-        if result.efficiency.is_nan() {
-            result.efficiency = 0.;
+        if efficiency.is_nan() {
+            efficiency = 0.;
         }
 
-        Ok(Some(result))
+        Ok(Some(UserStat {
+            user_id,
+            genkai_point,
+            total_vc_duration,
+            // panic safety: already asserted !effieicncy.is_nan()
+            efficiency: NotNan::new(efficiency).unwrap(),
+        }))
     }
 }
 
@@ -164,7 +168,7 @@ fn stat_test() {
         user_id: 0,
         genkai_point: 16,
         total_vc_duration: Duration::hours(3),
-        efficiency: 16.0 / 30.0,
+        efficiency: NotNan::new(16.0 / 30.0).unwrap(),
     };
 
     assert_eq!(test1.unwrap().unwrap(), expected);
