@@ -1,5 +1,7 @@
 from rust:slim-buster as base
-env NETTLE_STATIC=yes
+env NETTLE_STATIC=yes \
+    CARGO_TERM_PROGRESS_WHEN="always" \
+    CARGO_TERM_PROGRESS_WIDTH="80"
 workdir /src
 
 run apt-get update && \
