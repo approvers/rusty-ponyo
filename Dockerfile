@@ -4,16 +4,6 @@ env NETTLE_STATIC=yes \
     CARGO_TERM_PROGRESS_WIDTH="80"
 workdir /src
 
-run apt-get update && \
-    apt-get install -y \
-    clang \
-    cmake \
-    llvm \
-    nettle-dev \
-    libfreetype6-dev \
-    libfontconfig1-dev && \
-    rm -rf /var/lib/apt/lists/*
-
 copy rust-toolchain.toml .
 run cargo install cargo-chef --locked
 
@@ -26,36 +16,36 @@ run cargo chef prepare --recipe-path recipe.json
 
 # ---
 
+# note to myself: building with alpine to make fully static binary is bad idea.
+# it stucks on error like "libclang.so: Dynamic loading not supported".
+
 from base as build
+arg FEATURES="discord_client,mongo_db,plot_plotters_static"
+
+run apt-get update \
+    && apt-get install -y \
+    wget unzip clang \
+    cmake llvm nettle-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+copy --from=plan /src/download_font.sh .
+run ./download_font.sh
 
 copy --from=plan /src/recipe.json .
-run cargo chef cook --recipe-path recipe.json --release --no-default-features --features prod
+run cargo chef cook \
+    --recipe-path recipe.json \
+    --release --no-default-features --features ${FEATURES}
 
 copy . .
-run cargo build --release --no-default-features --features prod && \
-    cp /src/target/release/rusty-ponyo /
+
+run cargo build --release --no-default-features --features ${FEATURES}
 
 # ---
 
-from debian:buster-slim
+from gcr.io/distroless/cc-debian11
 
-run apt-get update && \
-    apt-get install -y \
-    libfreetype6 \
-    libfontconfig1 \
-    fonts-noto-cjk && \
-    rm -rf /var/lib/apt/lists/*
-
-run echo '<?xml version="1.0"?>\
-    <!DOCTYPE fontconfig SYSTEM "fonts.dtd">\
-    <fontconfig>\
-    <match target="pattern">\
-    <test name="family" qual="any"><string>sans-serif</string></test>\
-    <edit name="family" mode="prepend" binding="same"><string>Noto Sans CJK JP</string></edit>\
-    </match>\
-    </fontconfig>' > /etc/fonts/local.conf
-
-
-copy --from=build /rusty-ponyo /
+copy --from=build /src/target/release/rusty-ponyo /
+copy --from=build /src/OFL.txt /
 
 cmd ["/rusty-ponyo"]

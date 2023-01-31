@@ -31,6 +31,7 @@ ui! {
 enum Command {
     /// 指定されたリンクのプレビューを生成します。
     Preview {
+        #[allow(rustdoc::bare_urls)]
         /// コードのリンク
         /// 例: https://github.com/approvers/rusty-ponyo/blob/02bb011de7d06e242a275dd9a9126a21effc6854/Cargo.toml#L48-L52
         url: String,

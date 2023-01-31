@@ -14,10 +14,12 @@ memory_db = []
 plot_matplotlib = ["inline-python"]
 plot_plotters = ["plotters", "png"]
 
-dev = ["memory_db", "console_client", "plot_plotters"]
-prod = ["mongo_db", "discord_client", "plot_plotters"]
+plot_plotters_static = ["plot_plotters", "plotters/ab_glyph"]
+plot_plotters_dynamic = ["plot_plotters", "plotters/ttf"]
 
-default = ["prod"]
+dev = ["memory_db", "console_client", "plot_plotters_dynamic"]
+
+default = ["dev"]
 
 [dependencies]
 anyhow = "1"
@@ -49,7 +51,6 @@ tokio-stream = { version = "0.1", optional = true }
 inline-python = { version = "0.10", optional = true }
 
 # plot_plotters
-plotters = { version = "0.3", optional = true }
 png = { version = "0.17", optional = true }
 
 [dependencies.serenity]
@@ -71,6 +72,16 @@ features = ["rt-multi-thread", "parking_lot", "fs", "macros", "signal"]
 version = "2"
 features = ["bson-chrono-0_4"]
 optional = true
+
+# ab_glyph feature required for static build is not released yet (as of 2023/01/31)
+[dependencies.plotters]
+git = "https://github.com/plotters-rs/plotters.git"
+rev = "acf5158"
+optional = true
+default-features = false
+features = [
+    "bitmap_backend", "all_series", "all_elements", "full_palette", "ab_glyph",
+]
 
 [dev-dependencies]
 pretty_assertions = "1"

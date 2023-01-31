@@ -11,7 +11,13 @@ use {
 // FIXME: Japanese fonts rendering are broken.
 // FIXME: No axis description.
 
-pub(in crate::bot::genkai_point) struct Matplotlib;
+pub(crate) struct Matplotlib {}
+
+impl Matplotlib {
+    pub(crate) fn new() -> Self {
+        Self {}
+    }
+}
 
 impl Plotter for Matplotlib {
     fn plot(&self, data: Vec<(String, Vec<f64>)>) -> Result<Vec<u8>> {

@@ -1,3 +1,6 @@
-target/
-.git/
-Dockerfile
+/target/
+/.git/
+/Dockerfile
+/NotoSansJP-Medium.otf
+/OFL.txt
+/Noto.zip

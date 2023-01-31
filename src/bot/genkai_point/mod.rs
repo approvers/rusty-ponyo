@@ -1,5 +1,5 @@
 pub(crate) mod model;
-mod plot;
+pub(crate) mod plot;
 
 use {
     crate::bot::{
@@ -97,6 +97,10 @@ pub(crate) trait GenkaiPointDatabase: Send + Sync {
     }
 }
 
+pub(crate) trait Plotter: Send + Sync + 'static {
+    fn plot(&self, data: Vec<(String, Vec<f64>)>) -> Result<Vec<u8>>;
+}
+
 #[derive(Debug)]
 pub(crate) enum CreateNewSessionResult {
     CreatedNewSession,
@@ -104,19 +108,21 @@ pub(crate) enum CreateNewSessionResult {
     SessionResumed,
 }
 
-pub(crate) struct GenkaiPointBot<D> {
+pub(crate) struct GenkaiPointBot<D, P> {
     db: D,
     resume_msg_timeout: Mutex<DateTime<Utc>>,
+    plotter: P,
 }
 
 // chrono::Duration::seconds is not const fn yet.
 static RESUME_MSG_TIMEOUT: Lazy<Duration> = Lazy::new(|| Duration::seconds(10));
 
-impl<D: GenkaiPointDatabase> GenkaiPointBot<D> {
-    pub(crate) fn new(db: D) -> Self {
+impl<D: GenkaiPointDatabase, P: Plotter> GenkaiPointBot<D, P> {
+    pub(crate) fn new(db: D, plotter: P) -> Self {
         Self {
             db,
             resume_msg_timeout: Mutex::new(Utc::now()),
+            plotter,
         }
     }
 
@@ -169,21 +175,7 @@ impl<D: GenkaiPointDatabase> GenkaiPointBot<D> {
     async fn graph(&self, ctx: &dyn Context, n: u8) -> Result<()> {
         let n = n.clamp(1, 11);
 
-        #[cfg(feature = "plot_plotters")]
-        let plotter = plot::plotters::Plotters;
-
-        #[cfg(feature = "plot_matplotlib")]
-        let plotter = plot::plotters::Matplotlib;
-
-        #[cfg(all(feature = "plot_plotters", feature = "plot_matplotlib"))]
-        compile_error!(
-            "You can't enable both of plot_plotters and plot_matplotlib feature at the same time."
-        );
-
-        #[cfg(not(any(feature = "plot_plotters", feature = "plot_matplotlib")))]
-        compile_error!("You must enable plot_plotters or plot_matplotlib feature.");
-
-        let image = plot::plot(&self.db, ctx, plotter, n as _).await?;
+        let image = plot::plot(&self.db, ctx, &self.plotter, n as _).await?;
 
         match image {
             Some(image) => {
@@ -264,7 +256,7 @@ where
 }
 
 #[async_trait]
-impl<D: GenkaiPointDatabase> BotService for GenkaiPointBot<D> {
+impl<D: GenkaiPointDatabase, P: Plotter> BotService for GenkaiPointBot<D, P> {
     fn name(&self) -> &'static str {
         NAME
     }
