@@ -1,6 +1,6 @@
 use {
     crate::bot::{
-        genkai_point::{model::Session, GenkaiPointDatabase},
+        genkai_point::{model::Session, GenkaiPointDatabase, Plotter},
         Context,
     },
     anyhow::{Context as _, Result},
@@ -10,19 +10,15 @@ use {
 };
 
 #[cfg(feature = "plot_matplotlib")]
-pub(super) mod matplotlib;
+pub(crate) mod matplotlib;
 
 #[cfg(feature = "plot_plotters")]
-pub(super) mod plotters;
-
-pub(super) trait Plotter {
-    fn plot(&self, data: Vec<(String, Vec<f64>)>) -> Result<Vec<u8>>;
-}
+pub(crate) mod plotters;
 
 pub(super) async fn plot<P: Plotter + Send>(
     db: &impl GenkaiPointDatabase,
     ctx: &dyn Context,
-    plotter: P,
+    plotter: &P,
     top: usize,
 ) -> Result<Option<Vec<u8>>> {
     let all_sessions = {

@@ -20,8 +20,10 @@ jobs:
 
       - run: cargo fmt -- --check
 
+      - run: ./download_font.sh
+
       - run: cargo udeps --no-default-features --features dev
-      - run: cargo udeps --no-default-features --features prod
+      - run: cargo udeps --no-default-features --features discord_client,mongo_db,plot_plotters_static
 
       - uses: actions-rs/clippy-check@v1
         with:
@@ -32,9 +34,9 @@ jobs:
         with:
           name: prod clippy
           token: ${{ secrets.GITHUB_TOKEN }}
-          args: --no-default-features --features prod
+          args: --no-default-features --features discord_client,mongo_db,plot_plotters_static
 
       - name: dev test
         run: cargo test --no-default-features --features dev
       - name: prod test
-        run: cargo test --no-default-features --features prod
+        run: cargo test --no-default-features --features discord_client,mongo_db,plot_plotters_static

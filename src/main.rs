@@ -8,25 +8,19 @@ mod db;
 
 use {
     crate::bot::{
-        alias::MessageAliasBot, auth::GenkaiAuthBot, genkai_point::GenkaiPointBot,
-        gh::GitHubCodePreviewBot, vc_diff::VcDiffBot,
+        alias::MessageAliasBot,
+        auth::GenkaiAuthBot,
+        genkai_point::{plot, GenkaiPointBot},
+        gh::GitHubCodePreviewBot,
+        vc_diff::VcDiffBot,
     },
     anyhow::{Context as _, Result},
     bot::meigen::MeigenBot,
 };
 
-#[rustfmt::skip]
-#[cfg(all(feature = "discord_client", feature = "console_client"))]
-compile_error!("You can't enable both of discord_client and console_client feature at the same time.");
-
-#[cfg(all(feature = "mongo_db", feature = "memory_db"))]
-compile_error!("You can't enable both of mongo_db and memory_db feature at the same time.");
-
-#[cfg(not(any(feature = "discord_client", feature = "console_client")))]
-compile_error!("You must enable discord_client or console_client feature.");
-
-#[cfg(not(any(feature = "mongo_db", feature = "memory_db")))]
-compile_error!("You must enable mongo_db or memory_db feature.");
+assert_one_feature!("discord_client", "console_client");
+assert_one_feature!("mongo_db", "memory_db");
+assert_one_feature!("plot_plotters", "plot_matplotlib");
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -51,6 +45,11 @@ async fn main() -> Result<()> {
     #[cfg(feature = "discord_client")]
     let mut client = crate::client::discord::DiscordClient::new();
 
+    #[cfg(feature = "plot_plotters")]
+    let plotter = plot::plotters::Plotters::new();
+    #[cfg(feature = "plot_matplotlib")]
+    let plotter = plot::plotters::Matplotlib::new();
+
     let pgp_whitelist = env_var("PGP_SOURCE_DOMAIN_WHITELIST")?
         .split(',')
         .map(|x| x.to_string())
@@ -58,7 +57,7 @@ async fn main() -> Result<()> {
 
     client
         .add_service(MessageAliasBot::new(local_db.clone()))
-        .add_service(GenkaiPointBot::new(local_db.clone()))
+        .add_service(GenkaiPointBot::new(local_db.clone(), plotter))
         .add_service(GitHubCodePreviewBot)
         .add_service(GenkaiAuthBot::new(remote_db.clone(), pgp_whitelist))
         .add_service(MeigenBot::new(remote_db))
@@ -75,3 +74,27 @@ async fn main() -> Result<()> {
 fn env_var(name: &str) -> Result<String> {
     std::env::var(name).with_context(|| format!("failed to get {name} environment variable"))
 }
+
+macro_rules! assert_one_feature {
+    ($a:literal, $b: literal) => {
+        #[cfg(all(feature = $a, feature = $b))]
+        compile_error!(concat!(
+            "You can't enable both of ",
+            $a,
+            " and ",
+            $b,
+            " feature at the same time."
+        ));
+
+        #[cfg(not(any(feature = $a, feature = $b)))]
+        compile_error!(concat!(
+            "You must enable either ",
+            $a,
+            " or ",
+            $b,
+            " feature."
+        ));
+    };
+}
+
+use assert_one_feature;
