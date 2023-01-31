@@ -16,6 +16,9 @@ run cargo chef prepare --recipe-path recipe.json
 
 # ---
 
+# note to myself: building with alpine to make fully static binary is bad idea.
+# it stucks on error like "libclang.so: Dynamic loading not supported".
+
 from base as build
 arg FEATURES="discord_client,mongo_db,plot_plotters_static"
 
