@@ -4,6 +4,7 @@ use {
     async_trait::async_trait,
     std::{
         io::{stdin, stdout, Write},
+        path::Path,
         time::Instant,
     },
 };
@@ -43,13 +44,17 @@ impl<'a> ConsoleClient<'a> {
             let input = read_line();
             let mut attachments = vec![];
 
-            const ATTACHMENT_CMD: &str = "!attachments";
+            const ATTACHMENT_CMD: &str = "!attachment";
 
             let (content, attachments) = {
                 if let Some(stripped) = input.strip_prefix(ATTACHMENT_CMD) {
-                    for a in stripped.trim().split(' ') {
-                        attachments.push(ConsoleAttachment { name: a.trim() });
-                    }
+                    match ConsoleAttachment::load(stripped.trim()) {
+                        Ok(a) => attachments.push(a),
+                        Err(e) => {
+                            println!("(ConsoleClient): failed to load attachment: {e}");
+                            continue;
+                        }
+                    };
 
                     println!(
                         "(ConsoleClient): {} attachments confirmed. type message. or type STOP to cancel.",
@@ -147,21 +152,29 @@ impl<'a> User for ConsoleUser<'a> {
 }
 
 struct ConsoleAttachment<'a> {
-    name: &'a str,
+    path: &'a str,
+    content: Vec<u8>,
+}
+
+impl<'a> ConsoleAttachment<'a> {
+    fn load(path: &'a str) -> Result<Self, std::io::Error> {
+        let content = std::fs::read(path)?;
+        Ok(ConsoleAttachment { content, path })
+    }
 }
 
 #[async_trait]
-impl Attachment for ConsoleAttachment<'_> {
+impl<'a> Attachment for ConsoleAttachment<'a> {
     fn name(&self) -> &str {
-        self.name
+        Path::new(self.path).file_name().unwrap().to_str().unwrap()
     }
 
     fn size(&self) -> usize {
-        0
+        self.content.len()
     }
 
     async fn download(&self) -> Result<Vec<u8>> {
-        Ok(vec![])
+        Ok(self.content.clone())
     }
 }
 
@@ -186,7 +199,11 @@ impl Context for ConsoleContext {
                 msg.attachments.len(),
                 msg.attachments
                     .iter()
-                    .map(|x| x.name)
+                    .map(|x| format!(
+                        "{} ({:.2}MiB)",
+                        x.name,
+                        (x.data.len() as f64 / (1024.0 * 1024.0))
+                    ))
                     .collect::<Vec<_>>()
                     .join(", ")
             )
