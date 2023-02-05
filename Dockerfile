@@ -1,11 +1,16 @@
 from rust:slim-buster as base
-env NETTLE_STATIC=yes \
-    CARGO_TERM_PROGRESS_WHEN="always" \
+env CARGO_TERM_PROGRESS_WHEN="always" \
     CARGO_TERM_PROGRESS_WIDTH="80"
 workdir /src
 
 copy rust-toolchain.toml .
 run cargo install cargo-chef --locked
+
+# workaround for https://gitlab.com/sequoia-pgp/nettle-sys/-/issues/16
+env NETTLE_STATIC=yes \
+    HOGWEED_STATIC=yes \
+    GMP_STATIC=yes \
+    SYSROOT=/dummy
 
 # ---
 
@@ -24,9 +29,9 @@ arg FEATURES="discord_client,mongo_db,plot_plotters_static"
 
 run apt-get update \
     && apt-get install -y \
-    wget unzip clang \
-    cmake llvm nettle-dev \
-    pkg-config \
+       wget unzip clang \
+       cmake llvm nettle-dev \
+       pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 copy --from=plan /src/download_font.sh .
@@ -38,7 +43,6 @@ run cargo chef cook \
     --release --no-default-features --features ${FEATURES}
 
 copy . .
-
 run cargo build --release --no-default-features --features ${FEATURES}
 
 # ---
