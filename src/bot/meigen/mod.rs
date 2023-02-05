@@ -235,6 +235,10 @@ impl<D: MeigenDatabase> MeigenBot<D> {
     }
 
     async fn love(&self, caller: u64, id: MeigenId) -> Result<String> {
+        if self.db.load(id).await?.is_none() {
+            return Ok(format!("No.{id} を持つ名言は見つかりませんでした。"));
+        }
+
         Ok(if self.db.append_loved_user(id, caller).await? {
             "いいねしました".to_string()
         } else {
@@ -243,6 +247,10 @@ impl<D: MeigenDatabase> MeigenBot<D> {
     }
 
     async fn unlove(&self, caller: u64, id: MeigenId) -> Result<String> {
+        if self.db.load(id).await?.is_none() {
+            return Ok(format!("No.{id} を持つ名言は見つかりませんでした。"));
+        }
+
         Ok(if self.db.remove_loved_user(id, caller).await? {
             "いいねを解除しました".to_string()
         } else {
