@@ -2462,7 +2462,7 @@ checksum = "5583e89e108996506031660fe09baa5011b9dd0341b89029313006d1fb508d70"
 
 [[package]]
 name = "rusty-ponyo"
-version = "2023.2.5"
+version = "2023.2.5-1"
 dependencies = [
  "anyhow",
  "async-trait",
