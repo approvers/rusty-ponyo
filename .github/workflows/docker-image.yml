@@ -37,3 +37,5 @@ jobs:
         with:
           push: true
           tags: ${{ steps.generate-image-tag.outputs.IMAGE_NAME }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
