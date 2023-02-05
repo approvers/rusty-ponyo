@@ -21,7 +21,7 @@ const MAX_FILE_SIZE: usize = 512 * 1024;
 
 const MAX_COMPRESSABLE_FILE_SIZE: usize = 1024 * 1024 * 3;
 const COMPRESSABLE_FILE_EXTENSIONS: &[&str] = &[".jpg", ".jpeg", ".png"];
-const COMPRESS_TARGET_SIZE: usize = 256 * 1024;
+const COMPRESS_TARGET_SIZE: usize = 1024 * 256;
 
 const_assert!(MAX_COMPRESSABLE_FILE_SIZE > MAX_FILE_SIZE);
 const_assert!(COMPRESS_TARGET_SIZE <= MAX_FILE_SIZE);
@@ -93,10 +93,10 @@ impl<D: MessageAliasDatabase> MessageAliasBot<D> {
             match (ext, max_size_exceed, compress_max_size_exceed) {
                 (_, _, true) | (false, true, false) => {
                     error_msgs.push(format!(
-                        "添付ファイル(\"{}\")のサイズが大きすぎます({:.2}KB)。{}KB以下にしてください。",
+                        "添付ファイル(\"{}\")のサイズが大きすぎます({:.2}MiB)。{}MiB以下にしてください。",
                         attachment.name(),
-                        attachment.size() as f64 / 1024.0,
-                        MAX_FILE_SIZE / 1024,
+                        mib(attachment.size()),
+                        mib(MAX_FILE_SIZE),
                     ));
                 }
                 (true, true, false) => compress_download.push(attachment),
@@ -211,12 +211,15 @@ impl<D: MessageAliasDatabase> MessageAliasBot<D> {
             .await
             .context("failed to save new alias")?;
 
-        ctx.send_text_message(if force_applied {
-            "既存のエイリアスを削除し、強制的に作成しました"
+        let mut message = compress_messages.join("\n");
+
+        message += if force_applied {
+            "既存のエイリアスを削除して作成しました"
         } else {
             "作成しました"
-        })
-        .await?;
+        };
+
+        ctx.send_text_message(&message).await?;
 
         Ok(())
     }
