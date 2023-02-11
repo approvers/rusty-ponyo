@@ -214,12 +214,12 @@ impl<D: MessageAliasDatabase> MessageAliasBot<D> {
         let mut message = compress_messages.join("\n");
 
         message += if force_applied {
-            "既存のエイリアスを削除して作成しました"
+            "\n既存のエイリアスを削除して作成しました"
         } else {
-            "作成しました"
+            "\n作成しました"
         };
 
-        ctx.send_text_message(&message).await?;
+        ctx.send_text_message(message.trim()).await?;
 
         Ok(())
     }
