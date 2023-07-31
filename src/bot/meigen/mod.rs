@@ -60,6 +60,7 @@ enum Command {
         gopher: bool,
     },
 
+    /// 現在登録されている名言の数を表示します。
     Status,
 
     /// 名言をリスト表示します
