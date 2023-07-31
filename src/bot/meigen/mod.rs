@@ -48,59 +48,62 @@ ui! {
 enum Command {
     /// 名言を新規登録します
     Make {
+        /// 名言を発言した人の名前
         author: String,
+
+        /// 名言の内容
         content: String,
     },
 
     /// 指定されたIDを持つ名言を表示します
     Show {
+        /// 名言のID
         id: MeigenId,
 
+        /// 指定すると名言をGopherのASCIIアートで表示します
         #[clap(long)]
         gopher: bool,
     },
 
-    /// 現在登録されている名言の数を表示します。
+    /// 現在登録されている名言の数を表示します
     Status,
 
     /// 名言をリスト表示します
     List {
+        /// 表示する名言のオフセット
         #[clap(long)]
         #[clap(default_value_t = 0)]
         offset: u32,
 
+        /// 表示する名言の数
         #[clap(long)]
         #[clap(default_value_t = 5)]
         #[clap(value_parser(clap::value_parser!(u8).range(1..=10)))]
         limit: u8,
 
-        /// 指定された場合、検索条件に合致する名言の中からランダムに選び出して出力します。
+        /// 指定された場合、検索条件に合致する名言の中からランダムに選び出して出力します
         #[clap(short, long)]
         #[clap(default_value_t = false)]
         random: bool,
 
+        /// 指定した人の名言をリスト表示します
         #[clap(long)]
         author: Option<String>,
 
+        /// 指定した文字列を含む名言をリスト表示します
         #[clap(long)]
         content: Option<String>,
     },
 
     /// 名言を削除します
     /// かわえもんにしか使えません
-    Delete {
-        id: MeigenId,
-    },
+    Delete { id: MeigenId },
 
     /// 名言にいいねをします
-    Love {
-        id: MeigenId,
-    },
+    Love { id: MeigenId },
 
     /// 名言のいいねを取り消します
-    Unlove {
-        id: MeigenId,
-    },
+    Unlove { id: MeigenId },
 }
 
 pub struct MeigenBot<D> {
