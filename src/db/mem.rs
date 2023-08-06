@@ -160,7 +160,7 @@ impl GenkaiPointDatabase for MemoryDB {
 
         me.dump().await?;
 
-        Ok(CreateNewSessionResult::CreatedNewSession)
+        Ok(CreateNewSessionResult::NewSessionCreated)
     }
 
     async fn unclosed_session_exists(&self, user_id: u64) -> Result<bool> {

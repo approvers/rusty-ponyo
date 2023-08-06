@@ -1,9 +1,16 @@
+pub(crate) mod formula;
 pub(crate) mod model;
 pub(crate) mod plot;
 
 use {
     crate::bot::{
-        genkai_point::model::{Session, UserStat},
+        genkai_point::{
+            formula::{
+                default_formula, v1::FormulaV1, v2::FormulaV2, DynGenkaiPointFormula,
+                GenkaiPointFormula,
+            },
+            model::{Session, UserStat},
+        },
         parse_command, ui, BotService, Context, Message, SendAttachment, SendMessage,
     },
     anyhow::{Context as _, Result},
@@ -24,6 +31,9 @@ ui! {
         name: NAME,
         prefix: PREFIX,
         command: Command,
+
+        #[clap(short, long, value_enum, default_value_t=Formula::V2)]
+        formula: Formula,
     }
 }
 
@@ -60,6 +70,20 @@ enum RankingBy {
     Efficiency,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]
+enum Formula {
+    V1,
+    V2,
+}
+impl Formula {
+    fn instance(self) -> DynGenkaiPointFormula {
+        match self {
+            Formula::V1 => DynGenkaiPointFormula(Box::new(FormulaV1)),
+            Formula::V2 => DynGenkaiPointFormula(Box::new(FormulaV2)),
+        }
+    }
+}
+
 #[async_trait]
 pub(crate) trait GenkaiPointDatabase: Send + Sync {
     /// Creates a new unclosed session if not exists.
@@ -76,7 +100,10 @@ pub(crate) trait GenkaiPointDatabase: Send + Sync {
     async fn get_all_users_who_has_unclosed_session(&self) -> Result<Vec<u64>>;
     async fn get_all_sessions(&self) -> Result<Vec<Session>>;
 
-    async fn get_all_users_stats(&self) -> Result<Vec<UserStat>> {
+    async fn get_all_users_stats(
+        &self,
+        formula: &impl GenkaiPointFormula,
+    ) -> Result<Vec<UserStat>> {
         let sessions = self.get_all_sessions().await?;
 
         let user_sessions = {
@@ -91,7 +118,7 @@ pub(crate) trait GenkaiPointDatabase: Send + Sync {
 
         user_sessions
             .into_iter()
-            .flat_map(|(_, x)| UserStat::from_sessions(&x).transpose())
+            .flat_map(|(_, x)| UserStat::from_sessions(&x, formula).transpose())
             .collect::<Result<_>>()
             .context("failed to calc userstat")
     }
@@ -103,7 +130,7 @@ pub(crate) trait Plotter: Send + Sync + 'static {
 
 #[derive(Debug)]
 pub(crate) enum CreateNewSessionResult {
-    CreatedNewSession,
+    NewSessionCreated,
     UnclosedSessionExists,
     SessionResumed,
 }
@@ -126,13 +153,19 @@ impl<D: GenkaiPointDatabase, P: Plotter> GenkaiPointBot<D, P> {
         }
     }
 
-    async fn ranking<C>(&self, ctx: &dyn Context, by: &str, comparator: C) -> Result<()>
+    async fn ranking<C>(
+        &self,
+        ctx: &dyn Context,
+        formula: &impl GenkaiPointFormula,
+        by: &str,
+        comparator: C,
+    ) -> Result<()>
     where
         C: Fn(&UserStat, &UserStat) -> Ordering,
     {
         let mut ranking = self
             .db
-            .get_all_users_stats()
+            .get_all_users_stats(formula)
             .await
             .context("failed to fetch ranking")?;
 
@@ -143,7 +176,11 @@ impl<D: GenkaiPointDatabase, P: Plotter> GenkaiPointBot<D, P> {
 
         let mut result = String::with_capacity(256);
         d(writeln!(result, "```"));
-        d(writeln!(result, "sorted by {by}"));
+        d(writeln!(
+            result,
+            "sorted by {by}, using formula {}",
+            formula.name()
+        ));
 
         let iter = ranking.iter().rev().take(20).enumerate();
 
@@ -197,7 +234,12 @@ impl<D: GenkaiPointDatabase, P: Plotter> GenkaiPointBot<D, P> {
         .context("failed to send message")
     }
 
-    async fn show(&self, ctx: &dyn Context, user_id: u64) -> Result<()> {
+    async fn show(
+        &self,
+        ctx: &dyn Context,
+        formula: &impl GenkaiPointFormula,
+        user_id: u64,
+    ) -> Result<()> {
         let username = match ctx.get_user_name(user_id).await {
             Ok(n) => n,
             Err(_) => {
@@ -214,7 +256,7 @@ impl<D: GenkaiPointDatabase, P: Plotter> GenkaiPointBot<D, P> {
             .await
             .context("failed to get sessions")?;
 
-        let stat = UserStat::from_sessions(&sessions).context("failed to get userstat")?;
+        let stat = UserStat::from_sessions(&sessions, formula).context("failed to get userstat")?;
 
         let msg = match stat {
             Some(stat) => {
@@ -270,9 +312,10 @@ impl<D: GenkaiPointDatabase, P: Plotter> BotService for GenkaiPointBot<D, P> {
             return Ok(());
         };
 
+        let formula = parsed.formula.instance();
         match parsed.command {
             Command::Show { user_id } => {
-                self.show(ctx, user_id.unwrap_or_else(|| msg.author().id()))
+                self.show(ctx, &formula, user_id.unwrap_or_else(|| msg.author().id()))
                     .await?;
             }
 
@@ -288,18 +331,21 @@ impl<D: GenkaiPointDatabase, P: Plotter> BotService for GenkaiPointBot<D, P> {
                 match by {
                     RankingBy::Point => {
                         self.ranking(ctx,
+                            &formula,
                             "genkai point",
                             comparator(|x| x.genkai_point, invert),
                         ).await
                     }
                     RankingBy::Duration => {
                         self.ranking(ctx,
+                            &formula,
                             "total vc duration",
                             comparator(|x| x.total_vc_duration, invert),
                         ).await
                     }
                     RankingBy::Efficiency => {
                         self.ranking(ctx,
+                            &formula,
                             "genkai efficiency",
                             comparator(|x| x.efficiency, invert),
                         ).await
@@ -351,11 +397,11 @@ impl<D: GenkaiPointDatabase, P: Plotter> BotService for GenkaiPointBot<D, P> {
         sessions.sort_unstable_by_key(|x| x.left_at);
 
         let last_session = sessions.last().unwrap();
-        let this_time_point = last_session.calc_point();
+        let this_time_point = default_formula().calc(last_session);
 
         if this_time_point > 0 {
-            let stat = UserStat::from_sessions(&sessions)
-                .expect("`sessions` contains multiple user's session")
+            let stat = UserStat::from_sessions(&sessions, &default_formula())
+                .expect("sessions contains multiple user's session")
                 .expect("sessions must have 1 elements at least");
 
             let to_hours = |d: Duration| d.num_minutes() as f64 / 60.0;
@@ -394,7 +440,7 @@ impl<D: GenkaiPointDatabase, P: Plotter> BotService for GenkaiPointBot<D, P> {
             use CreateNewSessionResult::*;
 
             match op {
-                CreatedNewSession | SessionResumed => {
+                NewSessionCreated | SessionResumed => {
                     tracing::info!("User({}) has joined to vc in bot downtime", uid);
                 }
 
@@ -426,3 +472,15 @@ impl<D: GenkaiPointDatabase, P: Plotter> BotService for GenkaiPointBot<D, P> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+macro_rules! datetime {
+    ($y1:literal/$M1:literal/$d1:literal $h1:literal:$m1:literal:$s1:literal) => {
+        chrono::TimeZone::with_ymd_and_hms(&chrono_tz::Asia::Tokyo, $y1, $M1, $d1, $h1, $m1, $s1)
+            .unwrap()
+            .with_timezone(&Utc)
+    };
+}
+
+#[cfg(test)]
+use datetime;
