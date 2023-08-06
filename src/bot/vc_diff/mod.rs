@@ -94,8 +94,9 @@ impl BotService for VcDiffBot {
             return Ok(());
         }
 
-        let Some(parsed) = parse_command::<Ui>(msg.content(), ctx).await?
-            else { return Ok(()) };
+        let Some(parsed) = parse_command::<Ui>(msg.content(), ctx).await? else {
+            return Ok(());
+        };
 
         use Command::*;
 

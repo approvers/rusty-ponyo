@@ -62,8 +62,9 @@ impl GitHubCodePreviewBot {
     async fn on_command(&self, message: &str, ctx: &dyn Context) -> Result<()> {
         use Command::*;
 
-        let Some(parsed) = parse_command::<Ui>(message, ctx).await?
-            else { return Ok(()) };
+        let Some(parsed) = parse_command::<Ui>(message, ctx).await? else {
+            return Ok(());
+        };
 
         match parsed.command {
             Preview { url } => {

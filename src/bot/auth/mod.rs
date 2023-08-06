@@ -76,8 +76,9 @@ impl<D: GenkaiAuthDatabase> BotService for GenkaiAuthBot<D> {
             return Ok(());
         }
 
-        let Some(parsed) = parse_command::<Ui>(msg.content(), ctx).await?
-            else { return Ok(()) };
+        let Some(parsed) = parse_command::<Ui>(msg.content(), ctx).await? else {
+            return Ok(());
+        };
 
         match parsed.command {
             Command::Set {
