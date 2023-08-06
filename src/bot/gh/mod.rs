@@ -270,10 +270,12 @@ impl CodePermalink {
 
         let res = match res.error_for_status() {
             Ok(res) => res,
-            Err(code) if let Some(code) = code.status() => {
-                return Err(PreviewError::Fetch { status_code: code });
+            Err(code) => {
+                if let Some(code) = code.status() {
+                    return Err(PreviewError::Fetch { status_code: code });
+                }
+                Err(code).context("failed to fetch code")?
             }
-            e @ Err(_) =>  { e.context("failed to fetch code")?; unreachable!() },
         };
 
         let code = res.text().await.context("failed to download rawcode")?;
