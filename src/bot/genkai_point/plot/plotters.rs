@@ -19,7 +19,7 @@ impl Plotters {
                 plotters::style::register_font(
                     "sans-serif",
                     FontStyle::Normal,
-                    include_bytes!("../../../../NotoSansJP-Medium.otf"), // RUN download_font.sh IF YOU GOT THE NOT FOUND ERROR HERE
+                    include_bytes!("../../../../NotoSansJP-Medium.ttf"), // RUN download_font.sh IF YOU GOT THE NOT FOUND ERROR HERE
                 )
                 // this error doesn't implement Debug
                 .map_err(|_| panic!("failed to load embedded font"))
@@ -110,11 +110,13 @@ impl Plotter for Plotters {
 
 #[test]
 fn test() {
-    let result = Plotters::new().plot(vec![
-        ("kawaemon".into(), vec![1.0, 4.0, 6.0, 7.0]),
-        ("kawak".into(), vec![2.0, 5.0, 11.0, 14.0]),
-    ]);
+    let result = Plotters::new()
+        .plot(vec![
+            ("kawaemon".into(), vec![1.0, 4.0, 6.0, 7.0]),
+            ("kawak".into(), vec![2.0, 5.0, 11.0, 14.0]),
+        ])
+        .unwrap();
 
     // should we assert_eq with actual png?
-    assert_ne!(result.unwrap().len(), 0);
+    assert_ne!(result.len(), 0);
 }
