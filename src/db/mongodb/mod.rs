@@ -230,7 +230,7 @@ impl GenkaiPointDatabase for MongoDb {
             .await
             .context("failed to insert document")?;
 
-        Ok(CreateNewSessionResult::CreatedNewSession)
+        Ok(CreateNewSessionResult::NewSessionCreated)
     }
 
     async fn unclosed_session_exists(&self, user_id: u64) -> Result<bool> {
