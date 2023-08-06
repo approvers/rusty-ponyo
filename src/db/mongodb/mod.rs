@@ -485,10 +485,15 @@ impl MeigenDatabase for MongoDb {
     }
 
     async fn load(&self, id: MeigenId) -> Result<Option<Meigen>> {
-        let Some(d) = self.inner
+        let Some(d) = self
+            .inner
             .collection::<MongoMeigen>(MEIGEN_COLLECTION_NAME)
             .find_one(doc! { "id": id.0 }, None)
-            .await.context("failed to find meigen")? else { return Ok(None) };
+            .await
+            .context("failed to find meigen")?
+        else {
+            return Ok(None);
+        };
 
         Ok(Some(
             d.into_model()

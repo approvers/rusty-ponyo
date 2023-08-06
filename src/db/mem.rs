@@ -322,8 +322,9 @@ impl MeigenDatabase for MemoryDB {
 
     async fn delete(&self, id: MeigenId) -> Result<IsUpdated> {
         let mut inner = self.inner().await;
-        let Some(index) = inner.meigens.iter().position(|x| x.id == id)
-            else { return Ok(false) };
+        let Some(index) = inner.meigens.iter().position(|x| x.id == id) else {
+            return Ok(false);
+        };
 
         inner.meigens.remove(index);
 
@@ -357,8 +358,9 @@ impl MeigenDatabase for MemoryDB {
 
     async fn append_loved_user(&self, id: MeigenId, loved_user_id: u64) -> Result<IsUpdated> {
         let mut inner = self.inner().await;
-        let Some(meigen) = inner.meigens.iter_mut().find(|x| x.id == id)
-            else { return Ok(false) };
+        let Some(meigen) = inner.meigens.iter_mut().find(|x| x.id == id) else {
+            return Ok(false);
+        };
 
         if meigen.loved_user_id.contains(&loved_user_id) {
             return Ok(false);
@@ -370,10 +372,16 @@ impl MeigenDatabase for MemoryDB {
 
     async fn remove_loved_user(&self, id: MeigenId, loved_user_id: u64) -> Result<IsUpdated> {
         let mut inner = self.inner().await;
-        let Some(meigen) = inner.meigens.iter_mut().find(|x| x.id == id)
-            else { return Ok(false) };
-        let Some(index) = meigen.loved_user_id.iter().position(|&x| x == loved_user_id)
-            else { return Ok(false) };
+        let Some(meigen) = inner.meigens.iter_mut().find(|x| x.id == id) else {
+            return Ok(false);
+        };
+        let Some(index) = meigen
+            .loved_user_id
+            .iter()
+            .position(|&x| x == loved_user_id)
+        else {
+            return Ok(false);
+        };
 
         meigen.loved_user_id.swap_remove(index);
         Ok(true)

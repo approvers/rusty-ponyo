@@ -95,8 +95,9 @@ impl<D: MessageAliasDatabase> MessageAliasBot<D> {
     }
 
     async fn on_command(&self, message: &dyn Message, ctx: &dyn Context) -> Result<Option<String>> {
-        let Some(parsed) = parse_command::<Ui>(message.content(), ctx).await?
-            else { return Ok(None) };
+        let Some(parsed) = parse_command::<Ui>(message.content(), ctx).await? else {
+            return Ok(None);
+        };
 
         match parsed.command {
             Command::Status => Ok(Some(self.status().await?)),

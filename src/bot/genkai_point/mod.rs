@@ -266,8 +266,9 @@ impl<D: GenkaiPointDatabase, P: Plotter> BotService for GenkaiPointBot<D, P> {
             return Ok(());
         }
 
-        let Some(parsed) = parse_command::<Ui>(msg.content(), ctx).await?
-            else { return Ok(()) };
+        let Some(parsed) = parse_command::<Ui>(msg.content(), ctx).await? else {
+            return Ok(());
+        };
 
         match parsed.command {
             Command::Show { user_id } => {

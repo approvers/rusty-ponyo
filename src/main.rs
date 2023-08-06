@@ -1,5 +1,3 @@
-#![feature(let_chains)]
-#![feature(if_let_guard)]
 #![deny(warnings)]
 
 mod bot;

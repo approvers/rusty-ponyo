@@ -62,8 +62,9 @@ impl GitHubCodePreviewBot {
     async fn on_command(&self, message: &str, ctx: &dyn Context) -> Result<()> {
         use Command::*;
 
-        let Some(parsed) = parse_command::<Ui>(message, ctx).await?
-            else { return Ok(()) };
+        let Some(parsed) = parse_command::<Ui>(message, ctx).await? else {
+            return Ok(());
+        };
 
         match parsed.command {
             Preview { url } => {
@@ -93,7 +94,7 @@ impl GitHubCodePreviewBot {
             return Err(PreviewError::NoUrlDetected);
         }
 
-        let mut cache = CodeCache::new();
+        let cache = CodeCache::new();
         let mut msg = String::new();
         let mut buf = String::new();
 
@@ -101,7 +102,7 @@ impl GitHubCodePreviewBot {
         let mut is_backquote_replaced = false;
 
         for link in links {
-            let code = link.get_code(&mut cache).await?;
+            let code = link.get_code(&cache).await?;
 
             is_backquote_replaced |= code.contains("```");
 
@@ -186,10 +187,10 @@ type CodeCache = HashMap<String, String>;
 impl CodePermalink {
     fn find_from_str(msg: &str) -> Vec<Self> {
         static URL_REGEX: Lazy<Regex> = Lazy::new(|| {
-            Regex::new(r#"https?://(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&/=]*)"#).unwrap()
+            Regex::new(r"https?://(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&/=]*)").unwrap()
         });
         static LINE_REGEX: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r#"L(?P<l1>\d+)(?:-L(?P<l2>\d+))?"#).unwrap());
+            Lazy::new(|| Regex::new(r"L(?P<l1>\d+)(?:-L(?P<l2>\d+))?").unwrap());
 
         let mut res = URL_REGEX
             .find_iter(msg)
@@ -247,7 +248,7 @@ impl CodePermalink {
         res
     }
 
-    async fn get_code(&self, cache: &mut CodeCache) -> Result<String, PreviewError> {
+    async fn get_code(&self, cache: &CodeCache) -> Result<String, PreviewError> {
         let rawcode_url = format!(
             "https://raw.githubusercontent.com/{}/{}/{}/{}",
             self.user, self.repo, self.branch, self.path,
@@ -270,10 +271,12 @@ impl CodePermalink {
 
         let res = match res.error_for_status() {
             Ok(res) => res,
-            Err(code) if let Some(code) = code.status() => {
-                return Err(PreviewError::Fetch { status_code: code });
+            Err(code) => {
+                if let Some(code) = code.status() {
+                    return Err(PreviewError::Fetch { status_code: code });
+                }
+                Err(code).context("failed to fetch code")?
             }
-            e @ Err(_) =>  { e.context("failed to fetch code")?; unreachable!() },
         };
 
         let code = res.text().await.context("failed to download rawcode")?;

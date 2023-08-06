@@ -117,8 +117,9 @@ impl<D: MeigenDatabase> BotService for MeigenBot<D> {
             return Ok(());
         }
 
-        let Some(parsed) = parse_command::<Ui>(msg.content(), ctx).await?
-            else { return Ok(()) };
+        let Some(parsed) = parse_command::<Ui>(msg.content(), ctx).await? else {
+            return Ok(());
+        };
 
         let res = match parsed.command {
             Command::Make { author, content } => self.make(author, content).await?,
