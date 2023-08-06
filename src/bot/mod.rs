@@ -131,6 +131,7 @@ macro_rules! ui {
             name: $bot_name:ident,
             prefix: $prefix:ident,
             command: $command:ident,
+            $($rest:tt)*
         }
     ) => {
         $(#[$meta])*
@@ -139,6 +140,7 @@ macro_rules! ui {
         struct $name {
             #[clap(subcommand)]
             command: $command,
+            $($rest)*
         }
 
         impl $name {
