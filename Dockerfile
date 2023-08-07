@@ -1,10 +1,12 @@
 from rust:slim-buster as base
-env CARGO_TERM_PROGRESS_WHEN="always" \
-    CARGO_TERM_PROGRESS_WIDTH="80"
 workdir /src
 
 copy rust-toolchain.toml .
-run cargo install cargo-chef --locked
+
+# create rust toolchain cache layer
+run cargo --version
+
+run cargo install cargo-chef
 
 # workaround for https://gitlab.com/sequoia-pgp/nettle-sys/-/issues/16
 env NETTLE_STATIC=yes \
