@@ -261,8 +261,9 @@ impl<D: GenkaiPointDatabase, P: Plotter> GenkaiPointBot<D, P> {
         let msg = match stat {
             Some(stat) => {
                 format!(
-                    "```\n{name}\n  - 限界ポイント: {points}pt.\n  - 合計VC時間: {vc_hour:.2}h\n  - 限界効率: {efficiency:.2}%\n```",
+                    "```\n{name} (using formula {formula_version})\n  - 限界ポイント: {points}pt.\n  - 合計VC時間: {vc_hour:.2}h\n  - 限界効率: {efficiency:.2}%\n```",
                     name = username,
+                    formula_version = formula.name(),
                     points = stat.genkai_point,
                     vc_hour = stat.total_vc_duration.num_minutes() as f64 / 60.0,
                     efficiency = stat.efficiency * 100.0,
