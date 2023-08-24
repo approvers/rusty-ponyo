@@ -26,6 +26,9 @@ enum Command {
 
     /// 機能を無効化します
     Disable,
+
+    /// 現在機能が有効か無効かを表示します
+    Status,
 }
 
 pub(crate) struct VcDiffBot {
@@ -109,6 +112,15 @@ impl BotService for VcDiffBot {
             Disable => {
                 *self.enabled.lock().await = false;
                 "vcdiff を無効化しました"
+            }
+
+            Status => {
+                let enabled = *self.enabled.lock().await;
+                if enabled {
+                    "vcdiff は現在有効です"
+                } else {
+                    "vcdiff は現在無効です"
+                }
             }
         };
 
