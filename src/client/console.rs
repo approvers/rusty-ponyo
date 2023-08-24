@@ -212,6 +212,10 @@ impl Context for ConsoleContext {
         Ok(())
     }
 
+    async fn is_bot(&self, _user_id: u64) -> Result<bool> {
+        Ok(false)
+    }
+
     async fn get_user_name(&self, _user_id: u64) -> Result<String> {
         Ok("ConsoleUser".to_string())
     }

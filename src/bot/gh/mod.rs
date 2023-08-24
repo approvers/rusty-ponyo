@@ -345,6 +345,10 @@ mod test {
                 unimplemented!()
             }
 
+            async fn is_bot(&self, _: u64) -> Result<bool> {
+                unimplemented!()
+            }
+
             fn send_text_message<'a>(
                 &'a self,
                 text: &'a str,

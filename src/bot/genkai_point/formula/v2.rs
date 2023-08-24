@@ -27,6 +27,8 @@ impl GenkaiPointFormula for FormulaV2 {
         while end > start_cursor {
             let end_cursor;
 
+            // v1 に用いた関数をそれぞれ積分したもの
+
             let d = match start_cursor.hour() {
                 0..=2 => {
                     end_cursor = end.min(start_cursor.with_hms(3, 0, 0).unwrap());

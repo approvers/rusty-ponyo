@@ -58,6 +58,10 @@ enum Command {
         #[clap(long, short)]
         invert: bool,
 
+        /// Botを含めます
+        #[clap(long)]
+        include_bot: bool,
+
         #[clap(value_enum, default_value_t=RankingBy::Point)]
         by: RankingBy,
     },
@@ -153,24 +157,39 @@ impl<D: GenkaiPointDatabase, P: Plotter> GenkaiPointBot<D, P> {
         }
     }
 
+    // TODO: refactor needed
     async fn ranking<C>(
         &self,
         ctx: &dyn Context,
         formula: &impl GenkaiPointFormula,
         by: &str,
-        comparator: C,
+        sort_comparator: C,
+        include_bot: bool,
     ) -> Result<()>
     where
         C: Fn(&UserStat, &UserStat) -> Ordering,
     {
-        let mut ranking = self
-            .db
-            .get_all_users_stats(formula)
-            .await
-            .context("failed to fetch ranking")?;
+        let mut ranking = {
+            let stats = self
+                .db
+                .get_all_users_stats(formula)
+                .await
+                .context("failed to fetch ranking")?;
+
+            let mut res = vec![];
+
+            for stat in stats {
+                if !include_bot && ctx.is_bot(stat.user_id).await? {
+                    continue;
+                }
+                res.push(stat)
+            }
+
+            res
+        };
 
         ranking.sort_unstable_by_key(|x| x.user_id);
-        ranking.sort_by(comparator);
+        ranking.sort_by(sort_comparator);
 
         let d = drop;
 
@@ -328,6 +347,7 @@ impl<D: GenkaiPointDatabase, P: Plotter> BotService for GenkaiPointBot<D, P> {
             Command::Ranking {
                 by,
                 invert,
+                include_bot,
             } => {
                 match by {
                     RankingBy::Point => {
@@ -335,6 +355,7 @@ impl<D: GenkaiPointDatabase, P: Plotter> BotService for GenkaiPointBot<D, P> {
                             &formula,
                             "genkai point",
                             comparator(|x| x.genkai_point, invert),
+                            include_bot,
                         ).await
                     }
                     RankingBy::Duration => {
@@ -342,6 +363,7 @@ impl<D: GenkaiPointDatabase, P: Plotter> BotService for GenkaiPointBot<D, P> {
                             &formula,
                             "total vc duration",
                             comparator(|x| x.total_vc_duration, invert),
+                            include_bot,
                         ).await
                     }
                     RankingBy::Efficiency => {
@@ -349,6 +371,7 @@ impl<D: GenkaiPointDatabase, P: Plotter> BotService for GenkaiPointBot<D, P> {
                             &formula,
                             "genkai efficiency",
                             comparator(|x| x.efficiency, invert),
+                            include_bot,
                         ).await
                     }
                 }?;
@@ -364,6 +387,10 @@ impl<D: GenkaiPointDatabase, P: Plotter> BotService for GenkaiPointBot<D, P> {
             .create_new_session(user_id, Utc::now())
             .await
             .context("failed to create new session")?;
+
+        if ctx.is_bot(user_id).await? {
+            return Ok(());
+        }
 
         if let CreateNewSessionResult::SessionResumed = op {
             let mut timeout = self.resume_msg_timeout.lock().await;
@@ -388,6 +415,10 @@ impl<D: GenkaiPointDatabase, P: Plotter> BotService for GenkaiPointBot<D, P> {
             .close_session(user_id, Utc::now())
             .await
             .context("failed to close session")?;
+
+        if ctx.is_bot(user_id).await? {
+            return Ok(());
+        }
 
         let mut sessions = self
             .db

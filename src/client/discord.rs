@@ -89,6 +89,7 @@ struct EvHandlerInner {
     services: Vec<Box<dyn BotService>>,
     vc_joined_users: Mutex<HashSet<SerenityUserId>>,
     nickname_cache: RwLock<NicknameCache>,
+    is_bot_cache: RwLock<IsBotCache>,
 }
 
 struct EvHandler {
@@ -102,6 +103,7 @@ impl EvHandler {
                 services,
                 vc_joined_users: Mutex::new(HashSet::new()),
                 nickname_cache: RwLock::new(NicknameCache(HashMap::new())),
+                is_bot_cache: RwLock::new(IsBotCache(HashMap::new())),
             }),
         }
     }
@@ -168,6 +170,7 @@ impl EvHandler {
                 &ctx,
                 APPROVERS_DEFAULT_CHANNEL_ID,
                 &inner.nickname_cache,
+                &inner.is_bot_cache,
             );
 
             Self::do_for_each_service(&ctx, &inner, "on_vc_data_available", |s| {
@@ -200,6 +203,7 @@ impl EvHandler {
                 &ctx,
                 APPROVERS_DEFAULT_CHANNEL_ID,
                 &inner.nickname_cache,
+                &inner.is_bot_cache,
             );
 
             let mut self_state = inner.vc_joined_users.lock().await;
@@ -274,6 +278,7 @@ impl EventHandler for EvHandler {
             &ctx,
             APPROVERS_DEFAULT_CHANNEL_ID,
             &self.inner.nickname_cache,
+            &self.inner.is_bot_cache,
         );
 
         match (currently_joined, self_state_currently_joined) {
@@ -337,8 +342,12 @@ impl EventHandler for EvHandler {
             },
         };
 
-        let converted_context =
-            DiscordContext::from_serenity(&ctx, message.channel_id, &self.inner.nickname_cache);
+        let converted_context = DiscordContext::from_serenity(
+            &ctx,
+            message.channel_id,
+            &self.inner.nickname_cache,
+            &self.inner.is_bot_cache,
+        );
 
         Self::do_for_each_service(&ctx, &self.inner, "on_message", |s| {
             s.on_message(&converted_message, &converted_context)
@@ -348,6 +357,8 @@ impl EventHandler for EvHandler {
 }
 
 struct NicknameCache(HashMap<SerenityUserId, String>);
+
+struct IsBotCache(HashMap<SerenityUserId, bool>);
 
 struct DiscordMessage<'a> {
     content: String,
@@ -431,6 +442,7 @@ struct DiscordContext<'a> {
     origin: &'a SerenityContext,
     channel_id: SerenityChannelId,
     nickname_cache: &'a RwLock<NicknameCache>,
+    is_bot_cache: &'a RwLock<IsBotCache>,
 }
 
 impl<'a> DiscordContext<'a> {
@@ -438,11 +450,13 @@ impl<'a> DiscordContext<'a> {
         origin: &'a SerenityContext,
         channel_id: impl Into<SerenityChannelId>,
         nickname_cache: &'a RwLock<NicknameCache>,
+        is_bot_cache: &'a RwLock<IsBotCache>,
     ) -> Self {
         Self {
             origin,
             channel_id: channel_id.into(),
             nickname_cache,
+            is_bot_cache,
         }
     }
 }
@@ -485,6 +499,31 @@ impl Context for DiscordContext<'_> {
             .0
             .insert(user_id, user.name.clone());
 
+        self.is_bot_cache.write().await.0.insert(user_id, user.bot);
+
         return Ok(user.name);
+    }
+
+    async fn is_bot(&self, user_id: u64) -> Result<bool> {
+        let user_id = SerenityUserId(user_id);
+
+        if let Some(&bot) = self.is_bot_cache.read().await.0.get(&user_id) {
+            return Ok(bot);
+        }
+
+        let user = user_id
+            .to_user(self.origin)
+            .await
+            .context("failed to get username from discord")?;
+
+        self.nickname_cache
+            .write()
+            .await
+            .0
+            .insert(user_id, user.name.clone());
+
+        self.is_bot_cache.write().await.0.insert(user_id, user.bot);
+
+        return Ok(user.bot);
     }
 }
