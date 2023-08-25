@@ -2661,7 +2661,7 @@ dependencies = [
  "shellwords",
  "static_assertions",
  "thiserror",
- "time 0.1.45",
+ "time 0.3.27",
  "tokio",
  "tokio-stream",
  "tracing",
