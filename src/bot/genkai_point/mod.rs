@@ -62,6 +62,15 @@ enum Command {
         #[clap(long)]
         include_bot: bool,
 
+        /// 最近アクティブでない人を含めます
+        #[clap(long)]
+        include_inactive: bool,
+
+        /// 非アクティブと判定する基準を指定します
+        /// フォーマットは humantime クレートに則ります
+        #[clap(long, value_parser = parse_duration, default_value = "1month")]
+        inactive_threshold: Duration,
+
         #[clap(value_enum, default_value_t=RankingBy::Point)]
         by: RankingBy,
     },
@@ -86,6 +95,26 @@ impl Formula {
             Formula::V2 => DynGenkaiPointFormula(Box::new(FormulaV2)),
         }
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+enum DurationError {
+    #[error("パースに失敗しました")]
+    Parse(humantime::DurationError),
+    #[error("値が大きすぎます")]
+    OutOfRange(chrono::OutOfRangeError),
+    #[error("負の値は指定できません")]
+    Negative,
+}
+fn parse_duration(s: &str) -> Result<Duration, DurationError> {
+    let d = humantime::parse_duration(s).map_err(DurationError::Parse)?;
+    let d = Duration::from_std(d).map_err(DurationError::OutOfRange)?;
+
+    if Duration::zero() > d {
+        return Err(DurationError::Negative);
+    }
+
+    Ok(d)
 }
 
 #[async_trait]
@@ -165,6 +194,7 @@ impl<D: GenkaiPointDatabase, P: Plotter> GenkaiPointBot<D, P> {
         by: &str,
         sort_comparator: C,
         include_bot: bool,
+        inactive_threshold: Duration,
     ) -> Result<()>
     where
         C: Fn(&UserStat, &UserStat) -> Ordering,
@@ -180,6 +210,9 @@ impl<D: GenkaiPointDatabase, P: Plotter> GenkaiPointBot<D, P> {
 
             for stat in stats {
                 if !include_bot && ctx.is_bot(stat.user_id).await? {
+                    continue;
+                }
+                if Utc::now() - stat.last_activity_at > inactive_threshold {
                     continue;
                 }
                 res.push(stat)
@@ -300,21 +333,22 @@ impl<D: GenkaiPointDatabase, P: Plotter> GenkaiPointBot<D, P> {
     }
 }
 
-fn comparator<C>(
-    mapper: impl Fn(&UserStat) -> C,
+#[allow(clippy::type_complexity)]
+fn comparator<'a, C>(
+    mapper: impl 'a + Send + Fn(&UserStat) -> C,
     invert: bool,
-) -> impl Fn(&UserStat, &UserStat) -> Ordering
+) -> Box<dyn 'a + Send + Fn(&UserStat, &UserStat) -> Ordering>
 where
     C: std::cmp::PartialOrd,
 {
-    move |a, b| {
+    Box::new(move |a, b| {
         let res = mapper(a).partial_cmp(&mapper(b)).unwrap();
         if invert {
             res.reverse()
         } else {
             res
         }
-    }
+    })
 }
 
 #[async_trait]
@@ -343,38 +377,39 @@ impl<D: GenkaiPointDatabase, P: Plotter> BotService for GenkaiPointBot<D, P> {
                 self.graph(ctx, n).await?;
             }
 
-            #[rustfmt::skip]
             Command::Ranking {
                 by,
                 invert,
                 include_bot,
+                include_inactive,
+                inactive_threshold,
             } => {
-                match by {
-                    RankingBy::Point => {
-                        self.ranking(ctx,
-                            &formula,
-                            "genkai point",
-                            comparator(|x| x.genkai_point, invert),
-                            include_bot,
-                        ).await
-                    }
-                    RankingBy::Duration => {
-                        self.ranking(ctx,
-                            &formula,
-                            "total vc duration",
-                            comparator(|x| x.total_vc_duration, invert),
-                            include_bot,
-                        ).await
-                    }
+                let (by, comparator) = match by {
+                    RankingBy::Point => ("genkai point", comparator(|x| x.genkai_point, invert)),
+                    RankingBy::Duration => (
+                        "total vc duration",
+                        comparator(|x| x.total_vc_duration, invert),
+                    ),
                     RankingBy::Efficiency => {
-                        self.ranking(ctx,
-                            &formula,
-                            "genkai efficiency",
-                            comparator(|x| x.efficiency, invert),
-                            include_bot,
-                        ).await
+                        ("genkai efficiency", comparator(|x| x.efficiency, invert))
                     }
-                }?;
+                };
+
+                let inactive_threshold = if include_inactive {
+                    Duration::max_value()
+                } else {
+                    inactive_threshold
+                };
+
+                self.ranking(
+                    ctx,
+                    &formula,
+                    by,
+                    comparator,
+                    include_bot,
+                    inactive_threshold,
+                )
+                .await?
             }
         }
 
@@ -426,7 +461,7 @@ impl<D: GenkaiPointDatabase, P: Plotter> BotService for GenkaiPointBot<D, P> {
             .await
             .context("failed to get all closed sessions")?;
 
-        sessions.sort_unstable_by_key(|x| x.left_at);
+        sessions.sort_unstable_by_key(|x| x.left_at());
 
         let last_session = sessions.last().unwrap();
         let this_time_point = default_formula().calc(last_session);
@@ -510,7 +545,7 @@ macro_rules! datetime {
     ($y1:literal/$M1:literal/$d1:literal $h1:literal:$m1:literal:$s1:literal) => {
         chrono::TimeZone::with_ymd_and_hms(&chrono_tz::Asia::Tokyo, $y1, $M1, $d1, $h1, $m1, $s1)
             .unwrap()
-            .with_timezone(&Utc)
+            .with_timezone(&chrono::Utc)
     };
 }
 

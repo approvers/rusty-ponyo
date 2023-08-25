@@ -1,6 +1,6 @@
 use {
     crate::bot::genkai_point::{formula::GenkaiPointFormula, model::Session},
-    chrono::{DateTime, Duration, TimeZone, Timelike, Utc},
+    chrono::{DateTime, Duration, TimeZone, Timelike},
     chrono_tz::Asia::Tokyo,
 };
 
@@ -13,10 +13,7 @@ impl GenkaiPointFormula for FormulaV2 {
 
     fn calc(&self, session: &Session) -> u64 {
         let start = session.joined_at.with_timezone(&Tokyo);
-        let end = session
-            .left_at
-            .unwrap_or_else(Utc::now)
-            .with_timezone(&Tokyo);
+        let end = session.left_at().with_timezone(&Tokyo);
 
         let mut start_cursor = start;
 

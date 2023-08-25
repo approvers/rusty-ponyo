@@ -16,6 +16,7 @@ pub(crate) struct UserStat {
     pub(crate) genkai_point: u64,
     pub(crate) total_vc_duration: Duration,
     pub(crate) efficiency: NotNan<f64>,
+    pub(crate) last_activity_at: DateTime<Utc>,
 }
 
 impl UserStat {
@@ -30,6 +31,7 @@ impl UserStat {
         let user_id = sessions[0].user_id;
         let mut genkai_point = 0;
         let mut total_vc_duration = Duration::seconds(0);
+        let mut last_activity_at = sessions[0].left_at();
 
         for session in sessions {
             if user_id != session.user_id {
@@ -37,6 +39,8 @@ impl UserStat {
             }
 
             genkai_point += formula.calc(session);
+
+            last_activity_at = last_activity_at.max(session.left_at());
 
             // chrono::Duration has no AddAssign implementation.
             total_vc_duration = total_vc_duration + session.duration();
@@ -53,6 +57,7 @@ impl UserStat {
             user_id,
             genkai_point,
             total_vc_duration,
+            last_activity_at,
             // panic safety: already asserted !effieicncy.is_nan()
             efficiency: NotNan::new(efficiency).unwrap(),
         }))
@@ -69,6 +74,10 @@ pub(crate) struct Session {
 impl Session {
     pub(crate) fn duration(&self) -> Duration {
         self.left_at.unwrap_or_else(Utc::now) - self.joined_at
+    }
+
+    pub(crate) fn left_at(&self) -> DateTime<Utc> {
+        self.left_at.unwrap_or_else(Utc::now)
     }
 }
 
@@ -96,6 +105,7 @@ fn stat_test() {
         user_id: 0,
         genkai_point: 16,
         total_vc_duration: Duration::hours(3),
+        last_activity_at: datetime!(2021/3/2 1:30:00),
         efficiency: NotNan::new(16.0 / 30.0).unwrap(),
     };
 
