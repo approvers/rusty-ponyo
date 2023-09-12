@@ -33,7 +33,7 @@ jobs:
           [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
 
           echo "IMAGE_NAME=$IMAGE_ID:$VERSION" >> $GITHUB_OUTPUT
-      - uses: docker/build-push-action@v4
+      - uses: docker/build-push-action@v5
         with:
           push: true
           tags: ${{ steps.generate-image-tag.outputs.IMAGE_NAME }}
