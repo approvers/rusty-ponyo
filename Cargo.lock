@@ -1940,9 +1940,9 @@ dependencies = [
 
 [[package]]
 name = "ordered-float"
-version = "3.9.1"
+version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a54938017eacd63036332b4ae5c8a49fc8c0c1d6d629893057e4f13609edd06"
+checksum = "1e6545eeefeb1f28cb310e67593effb917c30b927c367efa80528a4d05adb6a5"
 dependencies = [
  "num-traits",
 ]
@@ -2645,7 +2645,7 @@ dependencies = [
  "libwebp-sys",
  "mongodb",
  "once_cell",
- "ordered-float 3.9.1",
+ "ordered-float 4.0.0",
  "parking_lot",
  "plotters",
  "png",
