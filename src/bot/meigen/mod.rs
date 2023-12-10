@@ -63,6 +63,10 @@ enum Command {
         /// 指定すると名言をGopherのASCIIアートで表示します
         #[clap(long)]
         gopher: bool,
+
+        /// 指定すると名言をFerrisのASCIIアートで表示します
+        #[clap(long)]
+        ferris: bool,
     },
 
     /// 現在登録されている名言の数を表示します
@@ -127,9 +131,11 @@ impl<D: MeigenDatabase> BotService for MeigenBot<D> {
 
         let res = match parsed.command {
             Command::Make { author, content } => self.make(author, content).await?,
-            Command::Show { id, gopher } => {
+            Command::Show { id, gopher, ferris } => {
                 if gopher {
                     self.gophersay(id).await?
+                } else if ferris {
+                    self.ferrissay(id).await?
                 } else {
                     self.show(id).await?
                 }
@@ -234,7 +240,16 @@ impl<D: MeigenDatabase> MeigenBot<D> {
         let meigen = self.db.load(id).await.context("failed to get meigen")?;
 
         Ok(match meigen {
-            Some(meigen) => format_gopher(&meigen),
+            Some(meigen) => format_ascii_meigen(&meigen, include_str!("./gopher.ascii")),
+            None => format!("No.{id} を持つ名言は見つかりませんでした。"),
+        })
+    }
+
+    async fn ferrissay(&self, id: MeigenId) -> Result<String> {
+        let meigen = self.db.load(id).await.context("failed to get meigen")?;
+
+        Ok(match meigen {
+            Some(meigen) => format_ascii_meigen(&meigen, include_str!("./ferris.ascii")),
             None => format!("No.{id} を持つ名言は見つかりませんでした。"),
         })
     }
@@ -283,7 +298,7 @@ fn list(meigens: &[Meigen]) -> String {
     res.trim().to_string()
 }
 
-fn format_gopher(meigen: &Meigen) -> String {
+fn format_ascii_meigen(meigen: &Meigen, ascii_art: &str) -> String {
     let meigen = format!("{}\n  --- {}", meigen.content, meigen.author)
         .lines()
         .collect::<Vec<_>>()
@@ -302,21 +317,31 @@ fn format_gopher(meigen: &Meigen) -> String {
 
     let bar = "-".chars().cycle().take(bar_length).collect::<String>();
 
-    format!(
-        "```\n{bar}\n   {meigen}\n{bar}\n{}\n```",
-        include_str!("./gopher.ascii")
-    )
+    format!("```\n{bar}\n   {meigen}\n{bar}\n{}\n```", ascii_art)
 }
 
 #[test]
 fn test_format_gopher() {
     assert_eq!(
-        format_gopher(&Meigen {
+        format_ascii_meigen(&Meigen {
             id: MeigenId(1),
             author: "あいうえお".to_string(),
             content: "abcdeあいうえおdddあ".to_string(),
             loved_user_id: vec![],
-        }),
+        }, include_str!("./gopher.ascii")),
         "```\n------------------------\n   abcdeあいうえおdddあ\n    --- あいうえお\n------------------------\n    \\\n     \\\n      \\\n         ,_---~~~~~----._         \n  _,,_,*^____      _____``*g*\\\"*, \n / __/ /'     ^.  /      \\ ^@q   f \n[  @f | @))    |  | @))   l  0 _/  \n \\`/   \\~____ / __ \\_____/    \\   \n  |           _l__l_           I   \n  }          [______]           I  \n  ]            | | |            |  \n  ]             ~ ~             |  \n  |                            |   \n   |                           |   \n\n```"
+    );
+}
+
+#[test]
+fn test_format_ferris() {
+    assert_eq!(
+        format_ascii_meigen(&Meigen {
+            id: MeigenId(1),
+            author: "あいうえお".to_string(),
+            content: "abcdeあいうえおdddあ".to_string(),
+            loved_user_id: vec![],
+        }, include_str!("./ferris.ascii")),
+        "```\n------------------------\n   abcdeあいうえおdddあ\n    --- あいうえお\n------------------------\n       \\\n        \\\n         \\\n            _~^~^~_\n        \\) /  o o  \\ (/\n          '_   -   _'\n          / '-----' \\\n\n```"
     );
 }
