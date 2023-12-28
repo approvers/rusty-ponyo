@@ -7,7 +7,7 @@ use {
         cert::CertParser,
         parse::{PacketParser, Parse},
         policy::StandardPolicy,
-        serialize::stream::{Armorer, Encryptor, LiteralWriter, Message as OpenGPGMessage},
+        serialize::stream::{Armorer, Encryptor2, LiteralWriter, Message as OpenGPGMessage},
         Cert,
     },
     sha2::Digest,
@@ -276,7 +276,7 @@ fn encrypt(cert: &str, text: &str) -> Result<String> {
     let mut output = vec![];
     let message = OpenGPGMessage::new(&mut output);
     let message = Armorer::new(message).build().unwrap();
-    let message = Encryptor::for_recipients(message, recipients)
+    let message = Encryptor2::for_recipients(message, recipients)
         .build()
         .unwrap();
     let mut message = LiteralWriter::new(message).build().unwrap();
