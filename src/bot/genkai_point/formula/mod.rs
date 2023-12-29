@@ -2,6 +2,7 @@ use crate::bot::genkai_point::{formula::v2::FormulaV2, model::Session};
 
 pub mod v1;
 pub mod v2;
+pub mod v3;
 
 pub(crate) trait GenkaiPointFormula: Send + Sync + 'static {
     fn name(&self) -> &'static str;
