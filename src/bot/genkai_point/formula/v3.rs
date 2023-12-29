@@ -35,7 +35,7 @@ fn formula(c: f64, t: f64) -> f64 {
 }
 
 // これはテストではないのでテストではない
-#[test(skip)]
+#[test]
 fn session_test() {
     use crate::bot::genkai_point::datetime;
 
