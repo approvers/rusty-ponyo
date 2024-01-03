@@ -1,4 +1,4 @@
-use crate::bot::genkai_point::{formula::v2::FormulaV2, model::Session};
+use {self::v3::FormulaV3, crate::bot::genkai_point::model::Session};
 
 pub mod v1;
 pub mod v2;
@@ -10,7 +10,7 @@ pub(crate) trait GenkaiPointFormula: Send + Sync + 'static {
 }
 
 pub(crate) fn default_formula() -> impl GenkaiPointFormula {
-    FormulaV2
+    FormulaV3
 }
 
 pub(crate) struct DynGenkaiPointFormula(pub Box<dyn GenkaiPointFormula>);

@@ -32,7 +32,7 @@ ui! {
         prefix: PREFIX,
         command: Command,
 
-        #[clap(short, long, value_enum, default_value_t=Formula::V2)]
+        #[clap(short, long, value_enum, default_value_t=Formula::V3)]
         formula: Formula,
     }
 }
@@ -87,12 +87,14 @@ enum RankingBy {
 enum Formula {
     V1,
     V2,
+    V3,
 }
 impl Formula {
     fn instance(self) -> DynGenkaiPointFormula {
         match self {
             Formula::V1 => DynGenkaiPointFormula(Box::new(FormulaV1)),
             Formula::V2 => DynGenkaiPointFormula(Box::new(FormulaV2)),
+            Formula::V3 => DynGenkaiPointFormula(Box::new(FormulaV3)),
         }
     }
 }
@@ -551,3 +553,5 @@ macro_rules! datetime {
 
 #[cfg(test)]
 use datetime;
+
+use self::formula::v3::FormulaV3;
