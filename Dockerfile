@@ -34,6 +34,7 @@ run apt-get update \
        wget unzip clang \
        cmake llvm nettle-dev \
        pkg-config \
+       libssl-dev ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 copy --from=plan /src/download_font.sh .

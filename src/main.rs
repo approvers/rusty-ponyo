@@ -22,6 +22,14 @@ assert_one_feature!("plot_plotters", "plot_matplotlib");
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let _guard = sentry::init((
+        "https://5ed0b77186e4d298ee64ed63cc25826d@sentry.approvers.dev/5",
+        sentry::ClientOptions {
+            release: sentry::release_name!(),
+            ..Default::default()
+        },
+    ));
+
     dotenv::dotenv().ok();
 
     let use_ansi = env_var("NO_COLOR").is_err();
