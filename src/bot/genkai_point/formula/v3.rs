@@ -21,6 +21,8 @@ impl GenkaiPointFormula for FormulaV3 {
 }
 
 #[rustfmt::skip]
+// rendered: https://www.geogebra.org/graphing/esdsm7rz
+// used for integrate: https://www.integral-calculator.com
 fn formula(c: f64, t: f64) -> f64 {
     let pi = core::f64::consts::PI;
 
