@@ -130,7 +130,7 @@ fn session_test() {
                 joined_at: $d1,
                 left_at: Some($d2),
             };
-            assert_eq!(FormulaV2.calc(&session), $point);
+            assert_eq!(FormulaV2.calc(&[session]).point, $point);
         }};
     }
 
