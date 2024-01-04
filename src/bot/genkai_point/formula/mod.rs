@@ -6,7 +6,13 @@ pub mod v3;
 
 pub(crate) trait GenkaiPointFormula: Send + Sync + 'static {
     fn name(&self) -> &'static str;
-    fn calc(&self, session: &Session) -> u64;
+    fn calc(&self, sessions: &[Session]) -> GenkaiPointFormulaOutput;
+}
+
+#[derive(Debug)]
+pub(crate) struct GenkaiPointFormulaOutput {
+    pub(crate) point: u64,
+    pub(crate) efficiency: f64,
 }
 
 pub(crate) fn default_formula() -> impl GenkaiPointFormula {
@@ -20,7 +26,7 @@ impl GenkaiPointFormula for DynGenkaiPointFormula {
         self.0.name()
     }
 
-    fn calc(&self, session: &Session) -> u64 {
-        self.0.calc(session)
+    fn calc(&self, sessions: &[Session]) -> GenkaiPointFormulaOutput {
+        self.0.calc(sessions)
     }
 }
