@@ -1,4 +1,8 @@
-use {super::GenkaiPointFormula, crate::bot::genkai_point::model::Session, chrono_tz::Asia::Tokyo};
+use {
+    super::{GenkaiPointFormula, GenkaiPointFormulaOutput},
+    crate::bot::genkai_point::model::Session,
+    chrono_tz::Asia::Tokyo,
+};
 
 pub(crate) struct FormulaV3;
 
@@ -7,16 +11,38 @@ impl GenkaiPointFormula for FormulaV3 {
         "v3"
     }
 
-    fn calc(&self, session: &Session) -> u64 {
-        let jdt = session.joined_at.with_timezone(&Tokyo);
-        let ldt = session.left_at().with_timezone(&Tokyo);
+    fn calc(&self, sessions: &[Session]) -> GenkaiPointFormulaOutput {
+        let (now_points, max_points) = sessions
+            .iter()
+            .map(|s| {
+                let jdt = s.joined_at.with_timezone(&Tokyo);
+                let ldt = s.left_at().with_timezone(&Tokyo);
 
-        const ONE_HOUR_MILLIS: i64 = 60 * 60 * 1000;
+                (jdt, ldt)
+            })
+            .map(|(jdt, ldt)| {
+                const ONE_HOUR_MILLIS: i64 = 60 * 60 * 1000;
 
-        let c = (jdt.timestamp_millis() % (24 * ONE_HOUR_MILLIS)) as f64 / ONE_HOUR_MILLIS as f64;
-        let t = (ldt - jdt).num_milliseconds() as f64 / ONE_HOUR_MILLIS as f64;
+                let c = (jdt.timestamp_millis() % (24 * ONE_HOUR_MILLIS)) as f64
+                    / ONE_HOUR_MILLIS as f64;
 
-        ((formula(c, t) - formula(c, 0.0)) * 10.0).round() as u64
+                let t = (ldt - jdt).num_milliseconds() as f64 / ONE_HOUR_MILLIS as f64;
+
+                #[rustfmt::skip]
+                let now_point = formula(   c, t) - formula(   c, 0.0);
+                let max_point = formula(23.0, t) - formula(23.0, 0.0);
+
+                (now_point, max_point)
+            })
+            .unzip::<_, _, Vec<_>, Vec<_>>();
+
+        let now_point = now_points.iter().sum::<f64>();
+        let max_point = max_points.iter().sum::<f64>();
+
+        let point = now_point.round() as u64;
+        let efficiency = now_point / max_point;
+
+        dbg!(GenkaiPointFormulaOutput { point, efficiency })
     }
 }
 

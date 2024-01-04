@@ -466,7 +466,9 @@ impl<D: GenkaiPointDatabase, P: Plotter> BotService for GenkaiPointBot<D, P> {
         sessions.sort_unstable_by_key(|x| x.left_at());
 
         let last_session = sessions.last().unwrap();
-        let this_time_point = default_formula().calc(last_session);
+        let this_time_point = default_formula()
+            .calc(core::slice::from_ref(last_session))
+            .point;
 
         if this_time_point > 0 {
             let stat = UserStat::from_sessions(&sessions, &default_formula())

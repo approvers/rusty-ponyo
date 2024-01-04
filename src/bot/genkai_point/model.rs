@@ -1,14 +1,10 @@
 use {
-    crate::bot::genkai_point::formula::GenkaiPointFormula,
+    crate::bot::genkai_point::formula::{GenkaiPointFormula, GenkaiPointFormulaOutput},
     anyhow::{bail, Result},
     chrono::{DateTime, Duration, Utc},
     ordered_float::NotNan,
     serde::{Deserialize, Serialize},
 };
-
-#[allow(dead_code)]
-pub(crate) const GENKAI_POINT_MIN: u64 = 0;
-pub(crate) const GENKAI_POINT_MAX: u64 = 10;
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct UserStat {
@@ -29,33 +25,24 @@ impl UserStat {
         }
 
         let user_id = sessions[0].user_id;
-        let mut genkai_point = 0;
-        let mut total_vc_duration = Duration::seconds(0);
-        let mut last_activity_at = sessions[0].left_at();
-
-        for session in sessions {
-            if user_id != session.user_id {
-                bail!("list contains different user's session");
-            }
-
-            genkai_point += formula.calc(session);
-
-            last_activity_at = last_activity_at.max(session.left_at());
-
-            // chrono::Duration has no AddAssign implementation.
-            total_vc_duration = total_vc_duration + session.duration();
+        if sessions.iter().any(|s| s.user_id != user_id) {
+            bail!("list contains different user's session");
         }
 
-        let mut efficiency = (genkai_point as f64 / GENKAI_POINT_MAX as f64)
-            / (total_vc_duration.num_minutes() as f64 / 60.0);
+        let GenkaiPointFormulaOutput { point, efficiency } = formula.calc(sessions);
+        let efficiency = efficiency.is_nan().then_some(0.0).unwrap_or(efficiency);
 
-        if efficiency.is_nan() {
-            efficiency = 0.;
-        }
+        let total_vc_duration = sessions
+            .iter()
+            .fold(Duration::zero(), |acc, s| acc + s.duration());
+
+        let last_activity_at = sessions
+            .iter()
+            .fold(sessions[0].joined_at, |acc, s| acc.max(s.left_at()));
 
         Ok(Some(UserStat {
             user_id,
-            genkai_point,
+            genkai_point: point,
             total_vc_duration,
             last_activity_at,
             // panic safety: already asserted !effieicncy.is_nan()
