@@ -30,7 +30,7 @@ impl UserStat {
         }
 
         let GenkaiPointFormulaOutput { point, efficiency } = formula.calc(sessions);
-        let efficiency = efficiency.is_nan().then_some(0.0).unwrap_or(efficiency);
+        let efficiency = if efficiency.is_nan() { 0.0 } else { efficiency };
 
         let total_vc_duration = sessions
             .iter()
