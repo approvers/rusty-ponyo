@@ -36,8 +36,8 @@ impl GenkaiPointFormula for FormulaV3 {
             })
             .unzip::<_, _, Vec<_>, Vec<_>>();
 
-        let now_point = now_points.iter().sum::<f64>();
-        let max_point = max_points.iter().sum::<f64>();
+        let now_point = now_points.iter().sum::<f64>() * 10.0;
+        let max_point = max_points.iter().sum::<f64>() * 10.0;
 
         let point = now_point.round() as u64;
         let efficiency = now_point / max_point;
