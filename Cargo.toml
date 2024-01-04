@@ -58,7 +58,6 @@ inline-python = { version = "0.12", optional = true }
 
 # plot_plotters
 png = { version = "0.17", optional = true }
-bigdecimal = "0.4.2"
 
 [dependencies.serenity]
 version = "0.11"
