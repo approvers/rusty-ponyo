@@ -81,6 +81,6 @@ fn formula(c: f64, t: f64) -> f64 {
     let ex8 =  58320.0 * pow(pi, 2);
     let ex9 = 209952.0             ;
 
-    let ex = ex4 + ex9 + ex8 + ex5 + ex3 + ex2 + ex1 + ex0 + ex7 + ex6;
+    let ex = ex0 + ex1 + ex2 + ex3 + ex4 + ex5 + ex6 + ex7 + ex8 + ex9;
     -1.0 * (3.0 * exp((-t + 2.0) / 2.0) * ex) / (8.0 * pi2_36_2 * pi2_09_2)
 }
