@@ -42,7 +42,7 @@ impl GenkaiPointFormula for FormulaV3 {
         let point = now_point.round() as u64;
         let efficiency = now_point / max_point;
 
-        dbg!(GenkaiPointFormulaOutput { point, efficiency })
+        GenkaiPointFormulaOutput { point, efficiency }
     }
 }
 

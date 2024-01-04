@@ -9,7 +9,6 @@ pub(crate) trait GenkaiPointFormula: Send + Sync + 'static {
     fn calc(&self, sessions: &[Session]) -> GenkaiPointFormulaOutput;
 }
 
-#[derive(Debug)]
 pub(crate) struct GenkaiPointFormulaOutput {
     pub(crate) point: u64,
     pub(crate) efficiency: f64,
