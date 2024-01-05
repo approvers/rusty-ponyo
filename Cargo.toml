@@ -98,5 +98,18 @@ features = [
     "ab_glyph",
 ]
 
+
+[dependencies.sentry]
+version = "0.32"
+default-features = false
+features = [
+    "backtrace",
+    "contexts",
+    "panic",
+    "debug-images",
+    "reqwest",
+    "rustls",
+]
+
 [dev-dependencies]
 pretty_assertions = "1"
