@@ -18,7 +18,7 @@ plot_plotters_static = ["plot_plotters", "plotters/ab_glyph"]
 plot_plotters_dynamic = ["plot_plotters", "plotters/ttf"]
 
 dev = ["memory_db", "console_client", "plot_plotters_dynamic"]
-# prod = ["mongo_db", "discord_client", "plot_plotters_static"]
+prod = ["mongo_db", "discord_client", "plot_plotters_static"]
 
 default = ["dev"]
 
@@ -60,7 +60,7 @@ inline-python = { version = "0.12", optional = true }
 png = { version = "0.17", optional = true }
 
 [dependencies.serenity]
-version = "0.11"
+version = "0.12"
 optional = true
 default-features = false
 features = [
