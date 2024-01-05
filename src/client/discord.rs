@@ -3,10 +3,9 @@ use {
     anyhow::{Context as _, Result},
     async_trait::async_trait,
     serenity::{
+        builder::{CreateAttachment, CreateMessage},
         model::{
-            channel::{
-                Attachment as SerenityAttachment, AttachmentType, Message as SerenityMessage,
-            },
+            channel::{Attachment as SerenityAttachment, Message as SerenityMessage},
             gateway::Ready,
             id::{ChannelId as SerenityChannelId, UserId as SerenityUserId},
             voice::VoiceState,
@@ -30,7 +29,7 @@ fn submit_signal_handler(client: &Client, waiter: impl Future + Send + 'static) 
 
     tokio::spawn(async move {
         waiter.await;
-        shard_manager.lock().await.shutdown_all().await;
+        shard_manager.shutdown_all().await;
     });
 }
 
@@ -128,7 +127,7 @@ impl EvHandler {
                     e
                 );
 
-                SerenityChannelId(APPROVERS_DEFAULT_CHANNEL_ID)
+                SerenityChannelId::new(APPROVERS_DEFAULT_CHANNEL_ID)
                     .say(
                         &ctx,
                         &format!("Unexpected error reported from \"{}\". Read log <@!391857452360007680>", service.name()),
@@ -146,14 +145,14 @@ impl EvHandler {
             interval.tick().await;
 
             let guild = match ctx.cache.guild(APPROVERS_GUILD_ID) {
-                Some(g) => g,
+                Some(g) => g.clone(),
                 None => continue,
             };
 
             let joined_users = guild
                 .voice_states
                 .keys()
-                .map(|user_id| user_id.0)
+                .map(|user_id| user_id.get())
                 .collect::<Vec<_>>();
 
             for user_id in &joined_users {
@@ -163,7 +162,7 @@ impl EvHandler {
                     .vc_joined_users
                     .lock()
                     .await
-                    .insert(SerenityUserId(*user_id));
+                    .insert(SerenityUserId::new(*user_id));
             }
 
             let converted_ctx = DiscordContext::from_serenity(
@@ -192,7 +191,7 @@ impl EvHandler {
             interval.tick().await;
 
             let guild = match ctx.cache.guild(APPROVERS_GUILD_ID) {
-                Some(g) => g,
+                Some(g) => g.clone(),
                 None => {
                     tracing::warn!("missing guild in validate_vc_cache_loop. This is not good sign because mismatch of inner.vc_state can occur.");
                     continue;
@@ -224,21 +223,21 @@ impl EvHandler {
 
             for uid in missing_in_self_state {
                 self_state.insert(uid);
-                tracing::info!("user({}) has actually joined to vc", uid.0);
+                tracing::info!("user({}) has actually joined to vc", uid.get());
 
                 Self::do_for_each_service(&ctx, &inner, "on_vc_join", |s| {
-                    s.on_vc_join(&converted_ctx, uid.0)
+                    s.on_vc_join(&converted_ctx, uid.get())
                 })
                 .await;
             }
 
             for uid in missing_in_serenity_state {
-                tracing::info!("user({}) has actually left from vc", uid.0);
+                tracing::info!("user({}) has actually left from vc", uid.get());
 
                 self_state.remove(&uid);
 
                 Self::do_for_each_service(&ctx, &inner, "on_vc_leave", |s| {
-                    s.on_vc_leave(&converted_ctx, uid.0)
+                    s.on_vc_leave(&converted_ctx, uid.get())
                 })
                 .await;
             }
@@ -284,24 +283,24 @@ impl EventHandler for EvHandler {
         match (currently_joined, self_state_currently_joined) {
             // joined
             (true, false) => {
-                tracing::debug!("User({}) has joined to vc", user_id.0,);
+                tracing::debug!("User({}) has joined to vc", user_id.get());
 
                 self_state.insert(user_id);
 
                 Self::do_for_each_service(&ctx, &self.inner, "on_vc_join", |s| {
-                    s.on_vc_join(&converted_ctx, user_id.0)
+                    s.on_vc_join(&converted_ctx, user_id.get())
                 })
                 .await;
             }
 
             // left
             (false, true) => {
-                tracing::debug!("User({}) has left from vc", user_id.0);
+                tracing::debug!("User({}) has left from vc", user_id.get());
 
                 self_state.remove(&user_id);
 
                 Self::do_for_each_service(&ctx, &self.inner, "on_vc_leave", |s| {
-                    s.on_vc_leave(&converted_ctx, user_id.0)
+                    s.on_vc_leave(&converted_ctx, user_id.get())
                 })
                 .await;
             }
@@ -336,7 +335,7 @@ impl EventHandler for EvHandler {
             content: message.content.clone(),
             attachments: converted_attachments.iter().map(|x| x as _).collect(),
             author: DiscordAuthor {
-                id: message.author.id.0,
+                id: message.author.id.get(),
                 name: message.author.name,
                 ctx: &ctx,
             },
@@ -400,17 +399,16 @@ impl<'a> User for DiscordAuthor<'a> {
         let files = msg
             .attachments
             .iter()
-            .map(|x| AttachmentType::Bytes {
-                data: x.data.into(),
-                filename: x.name.to_string(),
-            })
+            .map(|x| CreateAttachment::bytes(x.data, x.name))
             .collect::<Vec<_>>();
 
-        SerenityUserId(self.id)
+        let msg = CreateMessage::new().content(msg.content);
+
+        SerenityUserId::new(self.id)
             .create_dm_channel(self.ctx)
             .await
             .context("failed to create DM channel")?
-            .send_files(self.ctx, files, |m| m.content(msg.content))
+            .send_files(self.ctx, files, msg)
             .await
             .context("failed to send DM")?;
 
@@ -467,14 +465,13 @@ impl Context for DiscordContext<'_> {
         let files = msg
             .attachments
             .iter()
-            .map(|x| AttachmentType::Bytes {
-                data: x.data.into(),
-                filename: x.name.to_string(),
-            })
+            .map(|x| CreateAttachment::bytes(x.data, x.name))
             .collect::<Vec<_>>();
 
+        let msg = CreateMessage::new().content(msg.content);
+
         self.channel_id
-            .send_files(&self.origin.http, files, |m| m.content(msg.content))
+            .send_files(&self.origin.http, files, msg)
             .await
             .context("failed to send message to discord")?;
 
@@ -482,7 +479,7 @@ impl Context for DiscordContext<'_> {
     }
 
     async fn get_user_name(&self, user_id: u64) -> Result<String> {
-        let user_id = SerenityUserId(user_id);
+        let user_id = SerenityUserId::new(user_id);
 
         if let Some(nick) = self.nickname_cache.read().await.0.get(&user_id) {
             return Ok(nick.to_string());
@@ -505,7 +502,7 @@ impl Context for DiscordContext<'_> {
     }
 
     async fn is_bot(&self, user_id: u64) -> Result<bool> {
-        let user_id = SerenityUserId(user_id);
+        let user_id = SerenityUserId::new(user_id);
 
         if let Some(&bot) = self.is_bot_cache.read().await.0.get(&user_id) {
             return Ok(bot);
