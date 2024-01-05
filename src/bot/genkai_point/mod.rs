@@ -32,7 +32,7 @@ ui! {
         prefix: PREFIX,
         command: Command,
 
-        #[clap(short, long, value_enum, default_value_t=Formula::V2)]
+        #[clap(short, long, value_enum, default_value_t=Formula::V3)]
         formula: Formula,
     }
 }
@@ -87,12 +87,14 @@ enum RankingBy {
 enum Formula {
     V1,
     V2,
+    V3,
 }
 impl Formula {
     fn instance(self) -> DynGenkaiPointFormula {
         match self {
             Formula::V1 => DynGenkaiPointFormula(Box::new(FormulaV1)),
             Formula::V2 => DynGenkaiPointFormula(Box::new(FormulaV2)),
+            Formula::V3 => DynGenkaiPointFormula(Box::new(FormulaV3)),
         }
     }
 }
@@ -464,7 +466,9 @@ impl<D: GenkaiPointDatabase, P: Plotter> BotService for GenkaiPointBot<D, P> {
         sessions.sort_unstable_by_key(|x| x.left_at());
 
         let last_session = sessions.last().unwrap();
-        let this_time_point = default_formula().calc(last_session);
+        let this_time_point = default_formula()
+            .calc(core::slice::from_ref(last_session))
+            .point;
 
         if this_time_point > 0 {
             let stat = UserStat::from_sessions(&sessions, &default_formula())
@@ -551,3 +555,5 @@ macro_rules! datetime {
 
 #[cfg(test)]
 use datetime;
+
+use self::formula::v3::FormulaV3;

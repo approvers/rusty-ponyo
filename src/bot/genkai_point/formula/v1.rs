@@ -1,5 +1,8 @@
 use {
-    crate::bot::genkai_point::{formula::GenkaiPointFormula, model::Session},
+    crate::bot::genkai_point::{
+        formula::{GenkaiPointFormula, GenkaiPointFormulaOutput},
+        model::Session,
+    },
     chrono::{Duration, Timelike, Utc},
     chrono_tz::Asia::Tokyo,
 };
@@ -11,16 +14,32 @@ impl GenkaiPointFormula for FormulaV1 {
         "v1"
     }
 
-    fn calc(&self, session: &Session) -> u64 {
-        let joined_at = session.joined_at.with_timezone(&Tokyo);
-        let left_at = session.left_at.unwrap_or_else(Utc::now);
+    fn calc(&self, sessions: &[Session]) -> GenkaiPointFormulaOutput {
+        let point = sessions
+            .iter()
+            .map(|session| {
+                let joined_at = session.joined_at.with_timezone(&Tokyo);
+                let left_at = session.left_at.unwrap_or_else(Utc::now);
 
-        (1..)
-            .map(|x| joined_at + Duration::hours(x))
-            .take_while(|x| *x <= left_at)
-            .map(|x| x.hour())
-            .map(hour_to_point)
-            .sum()
+                (1..)
+                    .map(|x| joined_at + Duration::hours(x))
+                    .take_while(|x| *x <= left_at)
+                    .map(|x| x.hour())
+                    .map(hour_to_point)
+                    .sum::<u64>()
+            })
+            .sum();
+
+        let total_hours = sessions
+            .iter()
+            .map(|s| s.left_at() - s.joined_at)
+            .sum::<Duration>()
+            .num_milliseconds() as f64
+            / (60.0 * 60.0 * 1000.0);
+
+        let efficiency = (point as f64 / 10.0) / total_hours;
+
+        GenkaiPointFormulaOutput { point, efficiency }
     }
 }
 
@@ -60,7 +79,7 @@ fn session_test() {
                 joined_at: $d1,
                 left_at: Some($d2),
             };
-            assert_eq!(FormulaV1.calc(&session), $point);
+            assert_eq!(FormulaV1.calc(&[session]).point, $point);
         }};
     }
 

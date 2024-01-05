@@ -1,5 +1,8 @@
 use {
-    crate::bot::genkai_point::{formula::GenkaiPointFormula, model::Session},
+    crate::bot::genkai_point::{
+        formula::{GenkaiPointFormula, GenkaiPointFormulaOutput},
+        model::Session,
+    },
     chrono::{DateTime, Duration, TimeZone, Timelike},
     chrono_tz::Asia::Tokyo,
 };
@@ -11,74 +14,88 @@ impl GenkaiPointFormula for FormulaV2 {
         "v2"
     }
 
-    fn calc(&self, session: &Session) -> u64 {
-        let start = session.joined_at.with_timezone(&Tokyo);
-        let end = session.left_at().with_timezone(&Tokyo);
+    fn calc(&self, sessions: &[Session]) -> GenkaiPointFormulaOutput {
+        let pts = sessions.iter().map(formula).sum::<f64>();
+        let total_hours = sessions
+            .iter()
+            .map(|s| s.left_at() - s.joined_at)
+            .sum::<Duration>()
+            .num_milliseconds() as f64
+            / (60.0 * 60.0 * 1000.0);
 
-        let mut start_cursor = start;
+        let point = pts.round() as u64;
+        let efficiency = (pts / 10.0) / total_hours;
 
-        let sub = |a: f64, b: f64, f: fn(f64) -> f64| f(b) - f(a);
-
-        let mut res = 0.0;
-
-        while end > start_cursor {
-            let end_cursor;
-
-            // v1 に用いた関数をそれぞれ積分したもの
-
-            let d = match start_cursor.hour() {
-                0..=2 => {
-                    end_cursor = end.min(start_cursor.with_hms(3, 0, 0).unwrap());
-                    sub(start_cursor.hour_f64(), end_cursor.hour_f64(), |x| {
-                        (x.powi(2) / 2.0) + (7.0 * x)
-                    })
-                }
-                3..=5 => {
-                    end_cursor = end.min(start_cursor.with_hms(6, 0, 0).unwrap());
-                    sub(start_cursor.hour_f64(), end_cursor.hour_f64(), |x| {
-                        -(x.powi(2) / 2.0) + (13.0 * x)
-                    })
-                }
-                6..=8 => {
-                    end_cursor = end.min(start_cursor.with_hms(9, 0, 0).unwrap());
-                    sub(start_cursor.hour_f64(), end_cursor.hour_f64(), |x| {
-                        -x.powi(2) + (19.0 * x)
-                    })
-                }
-                9 => {
-                    end_cursor = end.min(start_cursor.with_hms(10, 0, 0).unwrap());
-                    sub(start_cursor.hour_f64(), end_cursor.hour_f64(), |x| {
-                        -(x.powi(2) / 2.0) + (10.0 * x)
-                    })
-                }
-                10..=19 => {
-                    end_cursor = end.min(start_cursor.with_hms(20, 0, 0).unwrap());
-                    0.0
-                }
-                20 => {
-                    end_cursor = end.min(start_cursor.with_hms(21, 0, 0).unwrap());
-                    sub(start_cursor.hour_f64(), end_cursor.hour_f64(), |x| {
-                        (x.powi(2) / 2.0) - (20.0 * x)
-                    })
-                }
-                21..=23 => {
-                    end_cursor =
-                        end.min(start_cursor.with_hms(0, 0, 0).unwrap() + Duration::days(1));
-
-                    let e = end_cursor.hour_f64();
-                    let e = if e == 0.0 { 23.9999 } else { e };
-
-                    sub(start_cursor.hour_f64(), e, |x| x.powi(2) - (41.0 * x))
-                }
-                x => unreachable!("hour {x} is not possible"),
-            };
-
-            res += d;
-            start_cursor = end_cursor;
-        }
-
-        res.round() as _
+        GenkaiPointFormulaOutput { point, efficiency }
     }
+}
+
+fn formula(session: &Session) -> f64 {
+    let start = session.joined_at.with_timezone(&Tokyo);
+    let end = session.left_at().with_timezone(&Tokyo);
+
+    let mut start_cursor = start;
+
+    let sub = |a: f64, b: f64, f: fn(f64) -> f64| f(b) - f(a);
+
+    let mut res = 0.0;
+
+    while end > start_cursor {
+        let end_cursor;
+
+        // v1 に用いた関数をそれぞれ積分したもの
+
+        let d = match start_cursor.hour() {
+            0..=2 => {
+                end_cursor = end.min(start_cursor.with_hms(3, 0, 0).unwrap());
+                sub(start_cursor.hour_f64(), end_cursor.hour_f64(), |x| {
+                    (x.powi(2) / 2.0) + (7.0 * x)
+                })
+            }
+            3..=5 => {
+                end_cursor = end.min(start_cursor.with_hms(6, 0, 0).unwrap());
+                sub(start_cursor.hour_f64(), end_cursor.hour_f64(), |x| {
+                    -(x.powi(2) / 2.0) + (13.0 * x)
+                })
+            }
+            6..=8 => {
+                end_cursor = end.min(start_cursor.with_hms(9, 0, 0).unwrap());
+                sub(start_cursor.hour_f64(), end_cursor.hour_f64(), |x| {
+                    -x.powi(2) + (19.0 * x)
+                })
+            }
+            9 => {
+                end_cursor = end.min(start_cursor.with_hms(10, 0, 0).unwrap());
+                sub(start_cursor.hour_f64(), end_cursor.hour_f64(), |x| {
+                    -(x.powi(2) / 2.0) + (10.0 * x)
+                })
+            }
+            10..=19 => {
+                end_cursor = end.min(start_cursor.with_hms(20, 0, 0).unwrap());
+                0.0
+            }
+            20 => {
+                end_cursor = end.min(start_cursor.with_hms(21, 0, 0).unwrap());
+                sub(start_cursor.hour_f64(), end_cursor.hour_f64(), |x| {
+                    (x.powi(2) / 2.0) - (20.0 * x)
+                })
+            }
+            21..=23 => {
+                end_cursor = end.min(start_cursor.with_hms(0, 0, 0).unwrap() + Duration::days(1));
+
+                let e = end_cursor.hour_f64();
+                let e = if e == 0.0 { 23.9999 } else { e };
+
+                sub(start_cursor.hour_f64(), e, |x| x.powi(2) - (41.0 * x))
+            }
+            x => unreachable!("hour {x} is not possible"),
+        };
+
+        res += d;
+        start_cursor = end_cursor;
+    }
+
+    res.round()
 }
 
 trait DateTimeExt<Tz: TimeZone> {
@@ -113,7 +130,7 @@ fn session_test() {
                 joined_at: $d1,
                 left_at: Some($d2),
             };
-            assert_eq!(FormulaV2.calc(&session), $point);
+            assert_eq!(FormulaV2.calc(&[session]).point, $point);
         }};
     }
 
