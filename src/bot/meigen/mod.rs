@@ -204,11 +204,7 @@ impl<D: MeigenDatabase> MeigenBot<D> {
             .await
             .context("Failed to fetch meigen count")?;
 
-        Ok(format!(
-            "```yaml
- total_count: {count}
- ```",
-        ))
+        Ok(format!("```\n現在登録されている名言数: {count}\n```"))
     }
 
     async fn search(&self, opt: FindOptions<'_>) -> Result<String> {
