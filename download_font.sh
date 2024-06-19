@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 export TERM="${TERM:-xterm-256color}"
 
 function info () {
