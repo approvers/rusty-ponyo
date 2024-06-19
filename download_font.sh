@@ -63,5 +63,5 @@ info 2 "delete ${OTF_FILENAME}"
 rm -f "${OTF_FILENAME}"
 info 0
 
-info 1 "complete! now available font"
+info 1 "complete! font file is now available"
 info 2 "at ${TTF_FILENAME}"
