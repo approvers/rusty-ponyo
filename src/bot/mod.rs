@@ -61,7 +61,7 @@ pub(crate) trait Context: Send + Sync {
     async fn get_user_name(&self, user_id: u64) -> Result<String>;
     async fn is_bot(&self, user_id: u64) -> Result<bool>;
 
-    #[must_use("Futures do nothing unless polled")]
+    #[must_use = "Futures do nothing unless polled"]
     fn send_text_message<'a>(
         &'a self,
         text: &'a str,
