@@ -13,7 +13,7 @@ memory_db = []
 
 plot_matplotlib = ["inline-python"]
 plot_plotters = ["plotters", "png"]
-plot_charming = ["charming"]
+plot_charming = ["charming", "crossbeam"]
 
 plot_plotters_static = ["plot_plotters", "plotters/ab_glyph"]
 plot_plotters_dynamic = ["plot_plotters", "plotters/ttf"]
@@ -29,7 +29,6 @@ async-trait = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
 chrono-tz = "0.8"
 clap = { version = "4", features = ["derive"] }
-crossbeam = "0.8"
 derivative = "2"
 dotenv = "0.15"
 hex = "0.4"
@@ -60,6 +59,16 @@ inline-python = { version = "0.12", optional = true }
 
 # plot_plotters
 png = { version = "0.17", optional = true }
+
+# plot_charming
+crossbeam = { version = "0.8", optional = true }
+
+[dependencies.charming]
+version = "0.3"
+optional = true
+default-features = false
+features = ["ssr"]
+
 
 [dependencies.serenity]
 version = "0.12"
@@ -112,12 +121,6 @@ features = [
     "reqwest",
     "rustls",
 ]
-
-[dependencies.charming]
-version = "0.3"
-optional = true
-default-features = false
-features = ["ssr"]
 
 [dev-dependencies]
 pretty_assertions = "1"
