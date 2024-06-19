@@ -1,5 +1,7 @@
 #!/bin/bash
 
+export TERM="${TERM:-xterm-256color}"
+
 function info () {
     local SUFFIX=$(tput sgr0)
 
