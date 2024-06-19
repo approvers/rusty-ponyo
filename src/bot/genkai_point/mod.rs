@@ -18,7 +18,7 @@ use {
     chrono::{DateTime, Duration, Utc},
     clap::ValueEnum,
     once_cell::sync::Lazy,
-    std::{cmp::Ordering, collections::HashMap, fmt::Write},
+    std::{cmp::Ordering, collections::HashMap, fmt::Write, future::Future},
     tokio::sync::Mutex,
 };
 
@@ -160,7 +160,7 @@ pub(crate) trait GenkaiPointDatabase: Send + Sync {
 }
 
 pub(crate) trait Plotter: Send + Sync + 'static {
-    fn plot(&self, data: Vec<(String, Vec<f64>)>) -> Result<Vec<u8>>;
+    fn plot(&self, data: Vec<(String, Vec<f64>)>) -> impl Future<Output = Result<Vec<u8>>> + Send;
 }
 
 #[derive(Debug)]

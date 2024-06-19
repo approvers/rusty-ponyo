@@ -5,27 +5,25 @@ use {
         component::Axis, element::name_location::NameLocation, series::Line, Chart, ImageFormat,
         ImageRenderer,
     },
-    std::{
-        sync::{Arc, Condvar, Mutex},
-        thread::{spawn, JoinHandle},
-        time::Instant,
-    },
+    crossbeam::channel::{Receiver, Sender},
+    std::thread,
+    tokio::sync::oneshot,
 };
 
 pub(crate) struct Charming {
-    renderer_handle: RendererHandle,
+    renderer: Renderer,
 }
 
 impl Charming {
     pub(crate) fn new() -> Self {
-        let renderer_handle = spawn_renderer();
+        let renderer = Renderer::spawn();
 
-        Self { renderer_handle }
+        Self { renderer }
     }
 }
 
 impl Plotter for Charming {
-    fn plot(&self, data: Vec<(String, Vec<f64>)>) -> Result<Vec<u8>> {
+    async fn plot(&self, data: Vec<(String, Vec<f64>)>) -> Result<Vec<u8>> {
         let chart = data
             .iter()
             .fold(Chart::new(), |chart, (label, data)| {
@@ -43,145 +41,86 @@ impl Plotter for Charming {
                     .name("累計VC時間(時)"),
             );
 
-        self.renderer_handle.call(chart)
+        self.renderer.render(chart).await
     }
 }
 
-struct RendererHandle {
-    port: Arc<Mutex<Job>>,
-    cond: Arc<Condvar>,
-
-    _handle: JoinHandle<()>,
+struct Request {
+    data: Chart,
+    bell: oneshot::Sender<Response>,
+}
+struct Response {
+    image: Result<Vec<u8>>,
 }
 
-impl RendererHandle {
-    fn call(&self, chart: Chart) -> Result<Vec<u8>> {
-        let mut guard = self
-            .port
-            .lock()
-            .map_err(|_| anyhow!("failed to lock job queue"))?;
+struct Renderer {
+    tx: Sender<Request>,
+    _thread_handle: thread::JoinHandle<()>,
+}
 
-        let chart = Unconsidered::wrap(chart);
-        let session = Session::new();
+impl Renderer {
+    fn render_thread(rx: Receiver<Request>) {
+        let mut renderer = ImageRenderer::new(1280, 720);
 
-        let Job::Idle = std::mem::replace(&mut *guard, Job::Queued(chart, session)) else {
-            unreachable!()
-        };
+        for req in rx {
+            let image = renderer
+                .render_format(ImageFormat::Png, &req.data)
+                .map_err(|e| anyhow!("charming error: {e:#?}"));
 
-        self.cond.notify_all();
+            req.bell.send(Response { image }).ok();
+        }
+    }
 
-        let mut guard = self
-            .cond
-            .wait_while(
-                guard,
-                |job| !matches!(job, Job::Finished(_, s) if session == *s),
-            )
-            .map_err(|_| anyhow!("failed to lock job queue"))?;
+    fn spawn() -> Self {
+        let (tx, rx) = crossbeam::channel::unbounded::<Request>();
 
-        let Job::Finished(result, _) = std::mem::replace(&mut *guard, Job::Idle) else {
-            dbg!(&*guard);
-            unreachable!()
-        };
+        let handle = std::thread::spawn(|| Self::render_thread(rx));
 
-        result.unwrap()
+        Self {
+            tx,
+            _thread_handle: handle,
+        }
+    }
+
+    async fn render(&self, data: Chart) -> Result<Vec<u8>> {
+        let (tx, rx) = oneshot::channel();
+
+        self.tx.send(Request { data, bell: tx }).unwrap();
+
+        rx.await.unwrap().image
     }
 }
 
-fn spawn_renderer() -> RendererHandle {
-    let port = Arc::new(Mutex::new(Job::Idle));
-    let cond = Arc::new(Condvar::new());
+#[tokio::test]
+async fn test() {
+    let charming = std::sync::Arc::new(Charming::new());
 
-    let _handle = {
-        let port = port.clone();
-        let cond = cond.clone();
+    let mut handles = vec![];
 
-        spawn(|| renderer_main(port, cond))
-    };
+    #[allow(unused_variables)]
+    for i in 0..10 {
+        let charming = charming.clone();
 
-    RendererHandle {
-        port,
-        cond,
-        _handle,
-    }
-}
+        handles.push(tokio::spawn(async move {
+            let result = charming
+                .plot(vec![
+                    ("kawaemon".into(), vec![1.0, 4.0, 6.0, 7.0]),
+                    ("kawak".into(), vec![2.0, 5.0, 11.0, 14.0]),
+                ])
+                .await
+                .unwrap();
 
-fn renderer_main(port: Arc<Mutex<Job>>, cond: Arc<Condvar>) {
-    let mut renderer = ImageRenderer::new(1280, 720);
+            // should we assert_eq with actual png?
+            assert_ne!(result.len(), 0);
 
-    while let Ok(Ok(mut job)) = port
-        .lock()
-        .map(|guard| cond.wait_while(guard, |job| !matches!(job, Job::Queued(..))))
-    {
-        let Job::Queued(arg0, session) = std::mem::replace(&mut *job, Job::Running) else {
-            unreachable!()
-        };
-
-        let arg0 = arg0.unwrap();
-        let ret = renderer
-            .render_format(ImageFormat::Png, &arg0)
-            .map_err(|_| anyhow!("no detail provided"));
-
-        let ret = Unconsidered::wrap(ret);
-        let Job::Running = std::mem::replace(&mut *job, Job::Finished(ret, session)) else {
-            unreachable!()
-        };
-
-        cond.notify_all();
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
-enum Job {
-    Idle,
-    Queued(Unconsidered<Chart>, Session),
-    Running,
-    Finished(Unconsidered<Result<Vec<u8>>>, Session),
-}
-
-struct Unconsidered<T>(T);
-
-impl<T> Unconsidered<T> {
-    fn wrap(val: T) -> Self {
-        Self(val)
+            // uncomment this to see image artifacts
+            // tokio::fs::write(format!("./out{i}.png"), result)
+            //     .await
+            //     .unwrap();
+        }));
     }
 
-    fn unwrap(self) -> T {
-        self.0
+    for h in handles {
+        h.await.unwrap();
     }
-}
-
-impl<T> std::fmt::Debug for Unconsidered<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{{unconsidered}}")
-    }
-}
-
-impl<T> PartialEq for Unconsidered<T> {
-    fn eq(&self, _: &Self) -> bool {
-        true
-    }
-}
-
-impl<T> Eq for Unconsidered<T> {}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Session(Instant);
-
-impl Session {
-    fn new() -> Self {
-        Self(Instant::now())
-    }
-}
-
-#[test]
-fn test() {
-    let result = Charming::new()
-        .plot(vec![
-            ("kawaemon".into(), vec![1.0, 4.0, 6.0, 7.0]),
-            ("kawak".into(), vec![2.0, 5.0, 11.0, 14.0]),
-        ])
-        .unwrap();
-
-    // should we assert_eq with actual png?
-    assert_ne!(result.len(), 0);
 }

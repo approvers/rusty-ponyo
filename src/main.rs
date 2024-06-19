@@ -74,7 +74,7 @@ async fn async_main() -> Result<()> {
     #[cfg(feature = "plot_plotters")]
     let plotter = plot::plotters::Plotters::new();
     #[cfg(feature = "plot_matplotlib")]
-    let plotter = plot::plotters::Matplotlib::new();
+    let plotter = plot::matplotlib::Matplotlib::new();
     #[cfg(feature = "plot_charming")]
     let plotter = plot::charming::Charming::new();
 

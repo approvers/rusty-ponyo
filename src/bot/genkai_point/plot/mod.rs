@@ -83,6 +83,7 @@ pub(super) async fn plot<P: Plotter + Send>(
     //        use tokio::task::spawn_blocking to solve this problem.
     let image = plotter
         .plot(prottable_data)
+        .await
         .context("failed to plot graph")?;
 
     Ok(Some(image))
