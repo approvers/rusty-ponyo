@@ -15,11 +15,7 @@ use {
     chrono::{DateTime, Duration, Utc},
     rand::seq::SliceRandom,
     serde::Serialize,
-    std::{
-        collections::HashMap,
-        ops::{Deref, DerefMut},
-        sync::Arc,
-    },
+    std::{collections::HashMap, ops::DerefMut, sync::Arc},
     tokio::sync::Mutex,
 };
 
@@ -49,7 +45,7 @@ impl MemoryDB {
         })))
     }
 
-    async fn inner(&self) -> impl Deref<Target = MemoryDBInner> + DerefMut + '_ {
+    async fn inner(&self) -> impl DerefMut<Target = MemoryDBInner> + DerefMut + '_ {
         self.0.lock().await
     }
 }

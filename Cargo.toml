@@ -27,13 +27,13 @@ default = ["dev"]
 anyhow = "1"
 async-trait = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
-chrono-tz = "0.8"
+chrono-tz = "0.9"
 clap = { version = "4", features = ["derive"] }
 derivative = "2"
 dotenv = "0.15"
 hex = "0.4"
 humantime = "2"
-image = { version = "0.24", features = ["webp-encoder"] }
+image = "0.25"
 libwebp-sys = "0.9"
 once_cell = "1"
 ordered-float = { version = "4" }
@@ -84,7 +84,7 @@ features = [
 ]
 
 [dependencies.reqwest]
-version = "0.11"
+version = "0.12"
 default-features = false
 features = ["rustls-tls"]
 
@@ -111,7 +111,7 @@ features = [
 
 
 [dependencies.sentry]
-version = "0.32"
+version = "0.34"
 default-features = false
 features = [
     "backtrace",
@@ -124,3 +124,7 @@ features = [
 
 [dev-dependencies]
 pretty_assertions = "1"
+
+[patch.crates-io]
+# note. この版が crates.io に publish されたら削除して :ok:
+pathfinder_simd = { git = "https://github.com/servo/pathfinder.git", package = "pathfinder_simd" }
