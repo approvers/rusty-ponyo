@@ -124,3 +124,7 @@ features = [
 
 [dev-dependencies]
 pretty_assertions = "1"
+
+[patch.crates-io]
+# note. この版が crates.io に publish されたら削除して :ok:
+pathfinder_simd = { git = "https://github.com/servo/pathfinder.git", package = "pathfinder_simd" }
