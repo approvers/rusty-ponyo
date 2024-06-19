@@ -32,7 +32,7 @@ impl Plotters {
 }
 
 impl Plotter for Plotters {
-    fn plot(&self, data: Vec<(String, Vec<f64>)>) -> Result<Vec<u8>> {
+    async fn plot(&self, data: Vec<(String, Vec<f64>)>) -> Result<Vec<u8>> {
         const SIZE: (usize, usize) = (1280, 720);
 
         let mut buffer = vec![0; SIZE.0 * SIZE.1 * 3];
@@ -108,13 +108,14 @@ impl Plotter for Plotters {
     }
 }
 
-#[test]
-fn test() {
+#[tokio::test]
+async fn test() {
     let result = Plotters::new()
         .plot(vec![
             ("kawaemon".into(), vec![1.0, 4.0, 6.0, 7.0]),
             ("kawak".into(), vec![2.0, 5.0, 11.0, 14.0]),
         ])
+        .await
         .unwrap();
 
     // should we assert_eq with actual png?

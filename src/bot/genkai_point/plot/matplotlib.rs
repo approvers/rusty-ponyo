@@ -20,7 +20,7 @@ impl Matplotlib {
 }
 
 impl Plotter for Matplotlib {
-    fn plot(&self, data: Vec<(String, Vec<f64>)>) -> Result<Vec<u8>> {
+    async fn plot(&self, data: Vec<(String, Vec<f64>)>) -> Result<Vec<u8>> {
         let result: Result<PythonContext, _> = std::panic::catch_unwind(|| {
             python! {
                 import io
@@ -47,12 +47,14 @@ impl Plotter for Matplotlib {
     }
 }
 
-#[test]
-fn test_plot_to_image() {
-    let result = Matplotlib.plot(vec![
-        ("kawaemon".into(), vec![1.0, 4.0, 6.0, 7.0]),
-        ("kawak".into(), vec![2.0, 5.0, 11.0, 14.0]),
-    ]);
+#[tokio::test]
+async fn test_plot_to_image() {
+    let result = Matplotlib {}
+        .plot(vec![
+            ("kawaemon".into(), vec![1.0, 4.0, 6.0, 7.0]),
+            ("kawak".into(), vec![2.0, 5.0, 11.0, 14.0]),
+        ])
+        .await;
 
     // should we assert_eq with actual png?
     assert_ne!(result.unwrap().len(), 0);

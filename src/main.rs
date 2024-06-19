@@ -17,7 +17,7 @@ use {
 
 assert_one_feature!("discord_client", "console_client");
 assert_one_feature!("mongo_db", "memory_db");
-assert_one_feature!("plot_plotters", "plot_matplotlib");
+assert_one_feature!("plot_plotters", "plot_matplotlib", "plot_charming");
 
 fn setup_sentry() -> Option<ClientInitGuard> {
     let Ok(sentry_dsn) = env_var("SENTRY_DSN") else {
@@ -74,7 +74,9 @@ async fn async_main() -> Result<()> {
     #[cfg(feature = "plot_plotters")]
     let plotter = plot::plotters::Plotters::new();
     #[cfg(feature = "plot_matplotlib")]
-    let plotter = plot::plotters::Matplotlib::new();
+    let plotter = plot::matplotlib::Matplotlib::new();
+    #[cfg(feature = "plot_charming")]
+    let plotter = plot::charming::Charming::new();
 
     let pgp_whitelist = env_var("PGP_SOURCE_DOMAIN_WHITELIST")?
         .split(',')
@@ -118,6 +120,56 @@ macro_rules! assert_one_feature {
             $a,
             " or ",
             $b,
+            " feature."
+        ));
+    };
+    ($a:literal, $b:literal, $c:literal) => {
+        #[cfg(all(feature = $a, feature = $b, feature = $c))]
+        compile_error!(concat!(
+            "You can't enable both of ",
+            $a,
+            " and ",
+            $b,
+            " and ",
+            $c,
+            " feature at the same time."
+        ));
+
+        #[cfg(all(feature = $a, feature = $b))]
+        compile_error!(concat!(
+            "You can't enable both of ",
+            $a,
+            " and ",
+            $b,
+            " feature at the same time."
+        ));
+
+        #[cfg(all(feature = $b, feature = $c))]
+        compile_error!(concat!(
+            "You can't enable both of ",
+            $b,
+            " and ",
+            $c,
+            " feature at the same time."
+        ));
+
+        #[cfg(all(feature = $c, feature = $a))]
+        compile_error!(concat!(
+            "You can't enable both of ",
+            $c,
+            " and ",
+            $a,
+            " feature at the same time."
+        ));
+
+        #[cfg(not(any(feature = $a, feature = $b, feature = $c)))]
+        compile_error!(concat!(
+            "You must enable either ",
+            $a,
+            " or ",
+            $b,
+            " or ",
+            $c,
             " feature."
         ));
     };
