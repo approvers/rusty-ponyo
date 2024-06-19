@@ -13,6 +13,7 @@ memory_db = []
 
 plot_matplotlib = ["inline-python"]
 plot_plotters = ["plotters", "png"]
+plot_charming = ["charming"]
 
 plot_plotters_static = ["plot_plotters", "plotters/ab_glyph"]
 plot_plotters_dynamic = ["plot_plotters", "plotters/ttf"]
@@ -110,6 +111,12 @@ features = [
     "reqwest",
     "rustls",
 ]
+
+[dependencies.charming]
+version = "0.3"
+optional = true
+default-features = false
+features = ["ssr"]
 
 [dev-dependencies]
 pretty_assertions = "1"
