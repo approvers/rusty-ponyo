@@ -13,7 +13,7 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
-      - uses: ructions/toolchain@v2
+      - uses: dtolnay/rust-toolchain@v1
       - uses: Swatinem/rust-cache@v2
       - name: install native deps
         run: sudo apt update && sudo apt install clang llvm pkg-config nettle-dev
