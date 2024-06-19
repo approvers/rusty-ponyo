@@ -15,6 +15,9 @@ pub(crate) mod matplotlib;
 #[cfg(feature = "plot_plotters")]
 pub(crate) mod plotters;
 
+#[cfg(feature = "plot_charming")]
+pub(crate) mod charming;
+
 pub(super) async fn plot<P: Plotter + Send>(
     db: &impl GenkaiPointDatabase,
     ctx: &dyn Context,
