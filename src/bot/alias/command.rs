@@ -249,7 +249,7 @@ enum CompressError {
 #[cfg(test)]
 #[test]
 fn compress_test() {
-    use image::{ImageOutputFormat, RgbImage};
+    use image::{ImageFormat, RgbImage};
 
     let mut img = RgbImage::new(512, 512);
     for pixel in img.pixels_mut() {
@@ -257,7 +257,7 @@ fn compress_test() {
     }
 
     let mut png = vec![];
-    img.write_to(&mut Cursor::new(&mut png), ImageOutputFormat::Png)
+    img.write_to(&mut Cursor::new(&mut png), ImageFormat::Png)
         .unwrap();
 
     compress(&png).unwrap();
