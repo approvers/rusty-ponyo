@@ -19,7 +19,7 @@ impl Plotters {
                 plotters::style::register_font(
                     "sans-serif",
                     FontStyle::Normal,
-                    include_bytes!("../../../../NotoSansJP-Medium.ttf"), // RUN download_font.sh IF YOU GOT THE NOT FOUND ERROR HERE
+                    include_bytes!("../../../../NotoSansCJKjp-Medium.ttf"), // RUN download_font.sh IF YOU GOT THE NOT FOUND ERROR HERE
                 )
                 // this error doesn't implement Debug
                 .map_err(|_| panic!("failed to load embedded font"))

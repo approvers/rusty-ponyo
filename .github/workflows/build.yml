@@ -20,7 +20,7 @@ jobs:
           toolchain: ${{ steps.parse-toolchain.outputs.spec }}
       - uses: Swatinem/rust-cache@v2
       - name: install native deps
-        run: sudo apt update && sudo apt install clang llvm pkg-config nettle-dev
+        run: sudo apt update && sudo apt install clang llvm pkg-config nettle-dev fontforge
       - run: cargo install cargo-udeps --locked
 
       - run: cargo fmt -- --check
