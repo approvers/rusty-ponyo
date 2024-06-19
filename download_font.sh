@@ -2,6 +2,13 @@
 
 set -e
 
+function failed () {
+    info 0
+    info 2 "unexpected exitcode! exiting..."
+}
+
+trap failed ERR
+
 export TERM="${TERM:-xterm-256color}"
 
 function info () {
