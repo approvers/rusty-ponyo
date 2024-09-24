@@ -23,12 +23,13 @@ run cargo chef prepare --recipe-path recipe.json
 from base as build
 arg FEATURES="discord_client,mongo_db,plot_plotters_static"
 
-run apt-get update \
-    && apt-get install -y \
-       wget unzip clang \
-       cmake llvm nettle-dev \
-       pkg-config \
-    && rm -rf /var/lib/apt/lists/*
+run --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    apt-get update \
+ && apt-get install -y \
+      wget unzip clang \
+      cmake llvm nettle-dev \
+      pkg-config fontforge
 
 copy --from=plan /src/download_font.sh .
 run ./download_font.sh
@@ -46,6 +47,5 @@ run cargo build --release --no-default-features --features ${FEATURES}
 from gcr.io/distroless/cc-debian11
 
 copy --from=build /src/target/release/rusty-ponyo /
-copy --from=build /src/OFL.txt /
 
 cmd ["/rusty-ponyo"]
