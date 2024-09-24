@@ -8,7 +8,10 @@ run cargo --version
 
 run cargo install cargo-chef
 
-env NETTLE_STATIC=yes
+env NETTLE_STATIC=yes \
+    HOGWEED_STATIC=yes \
+    GMP_STATIC=yes \
+    SYSROOT=/dummy
 
 # ---
 
