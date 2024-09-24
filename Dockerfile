@@ -1,7 +1,7 @@
 from rust:slim-buster as base
 workdir /src
 
-copy rust-toolchain.toml .
+# copy rust-toolchain.toml .
 
 # create rust toolchain cache layer
 run cargo --version
@@ -46,12 +46,13 @@ run --mount=type=cache,target=/src/target/,sharing=locked \
 
 copy . .
 run --mount=type=cache,target=/src/target/,sharing=locked \
-    cargo build --release --no-default-features --features ${FEATURES}
+    cargo build --release --no-default-features --features ${FEATURES} \
+ && cp ./target/release/rusty-ponyo /
 
 # ---
 
 from gcr.io/distroless/cc-debian11
 
-copy --from=build /src/target/release/rusty-ponyo /
+copy --from=build /rusty-ponyo /
 
 cmd ["/rusty-ponyo"]

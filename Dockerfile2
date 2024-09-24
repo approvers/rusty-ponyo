@@ -42,18 +42,17 @@ run cd \
 user root
 run pacman -R --noconfirm wget && pacman -U --noconfirm /home/kawak/nettle/nettle-*.pkg.*
 
+env NETTLE_STATIC=yes \
+    HOGWEED_STATIC=yes \
+    GMP_STATIC=yes \
+    SYSROOT=/dummy
+
 copy --from=plan /recipe.json .
 run --mount=type=cache,target=/src/target/,sharing=locked \
    cargo chef cook \
       --recipe-path recipe.json \
       --release --no-default-features --features prod
 
-copy . .
-
-env NETTLE_STATIC=yes \
-    HOGWEED_STATIC=yes \
-    GMP_STATIC=yes \
-    SYSROOT=/dummy
 
 run \
     echo 'fn main() {' > build.rs \
@@ -62,14 +61,14 @@ run \
  && echo '  println!("cargo::rustc-link-arg=/usr/lib/libgmp.a");' >> build.rs \
  && echo '}' >> build.rs
 
+copy . .
 run --mount=type=cache,target=/src/target/,sharing=locked \
    cargo build --release --no-default-features --features prod
 
 # ---
 
-# from gcr.io/distroless/cc-debian11
-#
-# copy --from=build /app/target/release/rusty-ponyo /
-#
-# cmd ["/rusty-ponyo"]
-#
+from gcr.io/distroless/cc-debian11
+
+copy --from=build /app/target/release/rusty-ponyo /
+
+cmd ["/rusty-ponyo"]

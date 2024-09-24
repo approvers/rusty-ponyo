@@ -63,6 +63,7 @@ png = { version = "0.17", optional = true }
 
 # plot_charming
 crossbeam = { version = "0.8", optional = true }
+bzip2-sys = { version = "0.1.11", features = ["static"] }
 
 [dependencies.charming]
 version = "0.3"
