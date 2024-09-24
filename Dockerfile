@@ -8,6 +8,8 @@ run cargo --version
 
 run cargo install cargo-chef
 
+env NETTLE_STATIC=yes
+
 # ---
 
 from base as plan
