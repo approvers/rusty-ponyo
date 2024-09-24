@@ -18,8 +18,8 @@ plot_charming = ["charming", "crossbeam"]
 plot_plotters_static = ["plot_plotters", "plotters/ab_glyph"]
 plot_plotters_dynamic = ["plot_plotters", "plotters/ttf"]
 
-dev = ["memory_db", "console_client", "plot_plotters_dynamic"]
-prod = ["mongo_db", "discord_client", "plot_plotters_static"]
+dev = ["memory_db", "console_client", "plot_charming"]
+prod = ["mongo_db", "discord_client", "plot_charming"]
 
 default = ["dev"]
 
