@@ -8,7 +8,7 @@ edition = "2021"
 discord_client = ["serenity"]
 console_client = []
 
-mongo_db = ["mongodb", "tokio-stream"]
+mongo_db = ["mongodb", "tokio-stream", "bson"]
 memory_db = []
 
 plot_matplotlib = ["inline-python"]
@@ -21,20 +21,20 @@ plot_plotters_dynamic = ["plot_plotters", "plotters/ttf"]
 dev = ["memory_db", "console_client", "plot_charming"]
 prod = ["mongo_db", "discord_client", "plot_charming"]
 
-default = ["dev"]
+default = ["prod"]
 
 [dependencies]
 anyhow = "1"
 async-trait = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
-chrono-tz = "0.9"
+chrono-tz = "0.10"
 clap = { version = "4", features = ["derive"] }
 derivative = "2"
 dotenv = "0.15"
 hex = "0.4"
 humantime = "2"
 image = "0.25"
-libwebp-sys = "0.9"
+libwebp-sys = "0.10"
 once_cell = "1"
 ordered-float = { version = "4" }
 parking_lot = "0.12"
@@ -53,6 +53,7 @@ url = "2"
 
 # mongo
 tokio-stream = { version = "0.1", optional = true }
+bson = { version = "2.13.0", features = ["chrono-0_4"], optional = true }
 
 # plot_matplotlib
 inline-python = { version = "0.12", optional = true }
@@ -93,8 +94,7 @@ version = "1"
 features = ["rt-multi-thread", "parking_lot", "fs", "macros", "signal"]
 
 [dependencies.mongodb]
-version = "2"
-features = ["bson-chrono-0_4"]
+version = "3"
 optional = true
 
 [dependencies.plotters]

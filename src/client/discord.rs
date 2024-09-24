@@ -381,6 +381,7 @@ impl Message for DiscordMessage<'_> {
 
 struct DiscordAuthor<'a> {
     id: u64,
+    #[allow(unused)]
     name: String,
     ctx: &'a SerenityContext,
 }

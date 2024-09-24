@@ -20,7 +20,7 @@ use {
     chrono::{DateTime, Duration, Utc},
     mongodb::{
         bson::{self, doc, oid::ObjectId, Document},
-        options::{ClientOptions, FindOneAndUpdateOptions},
+        options::ClientOptions,
         Client, Collection, Database,
     },
     serde::{de::DeserializeOwned, Deserialize},
@@ -56,7 +56,7 @@ impl MessageAliasDatabase for MongoDb {
     async fn save(&self, alias: MessageAlias) -> Result<()> {
         self.inner
             .collection::<MongoMessageAlias>(MESSAGE_ALIAS_COLLECTION_NAME)
-            .insert_one(MongoMessageAlias::from(alias), None)
+            .insert_one(MongoMessageAlias::from(alias))
             .await
             .context("failed to insert new alias")?;
 
@@ -66,7 +66,7 @@ impl MessageAliasDatabase for MongoDb {
     async fn get(&self, key: &str) -> Result<Option<MessageAlias>> {
         self.inner
             .collection::<MongoMessageAlias>(MESSAGE_ALIAS_COLLECTION_NAME)
-            .find_one(doc! { "key": key }, None)
+            .find_one(doc! { "key": key })
             .await
             .map(|x| x.map(|x| x.into()))
             .context("failed to deserialize alias")
@@ -78,11 +78,7 @@ impl MessageAliasDatabase for MongoDb {
         if result.is_some() {
             self.inner
                 .collection::<MongoMessageAlias>(MESSAGE_ALIAS_COLLECTION_NAME)
-                .update_one(
-                    doc! { "key": key },
-                    doc! { "$inc": { "usage_count": 1 } },
-                    None,
-                )
+                .update_one(doc! { "key": key }, doc! { "$inc": { "usage_count": 1 } })
                 .await
                 .context("failed to increment usage_count")?;
         }
@@ -93,7 +89,7 @@ impl MessageAliasDatabase for MongoDb {
     async fn len(&self) -> Result<u32> {
         self.inner
             .collection::<MongoMessageAlias>(MESSAGE_ALIAS_COLLECTION_NAME)
-            .aggregate(Some(doc! { "$count": "key" }), None)
+            .aggregate(Some(doc! { "$count": "key" }))
             .await
             .context("failed to aggregate")?
             .next()
@@ -110,7 +106,7 @@ impl MessageAliasDatabase for MongoDb {
     async fn delete(&self, key: &str) -> Result<IsUpdated> {
         self.inner
             .collection::<MongoMessageAlias>(MESSAGE_ALIAS_COLLECTION_NAME)
-            .delete_one(doc! { "key": key }, None)
+            .delete_one(doc! { "key": key })
             .await
             .context("failed to delete alias")
             .map(|x| x.deleted_count == 1)
@@ -119,13 +115,10 @@ impl MessageAliasDatabase for MongoDb {
     async fn usage_count_top_n(&self, n: usize) -> Result<Vec<MessageAlias>> {
         self.inner
             .collection::<MongoMessageAlias>(MESSAGE_ALIAS_COLLECTION_NAME)
-            .aggregate(
-                vec![
-                    doc! { "$sort": { "usage_count": -1 } },
-                    doc! { "$limit": n as i64 },
-                ],
-                None,
-            )
+            .aggregate(vec![
+                doc! { "$sort": { "usage_count": -1 } },
+                doc! { "$limit": n as i64 },
+            ])
             .await
             .context("failed to aggregate top usage counts")?
             .map(|x| x.map(|x| bson::from_document::<MongoMessageAlias>(x).map(|x| x.into())))
@@ -153,14 +146,11 @@ impl MongoDb {
     ) -> Result<Option<SessionWithDocId>> {
         self.inner
             .collection::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
-            .aggregate(
-                vec![
-                    doc! { "$match": { "user_id": user_id.to_string() } },
-                    doc! { "$sort": { "joined_at": -1 } },
-                    doc! { "$limit": 1 },
-                ],
-                None,
-            )
+            .aggregate(vec![
+                doc! { "$match": { "user_id": user_id.to_string() } },
+                doc! { "$sort": { "joined_at": -1 } },
+                doc! { "$limit": 1 },
+            ])
             .await
             .context("failed to aggregate")?
             .next()
@@ -204,11 +194,7 @@ impl GenkaiPointDatabase for MongoDb {
                 if (Utc::now() - left_at) < Duration::minutes(5) {
                     self.inner
                         .collection::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
-                        .update_one(
-                            doc! { "_id": doc_id },
-                            doc! { "$unset": { "left_at": "" } },
-                            None,
-                        )
+                        .update_one(doc! { "_id": doc_id }, doc! { "$unset": { "left_at": "" } })
                         .await
                         .context("failed to unset left_at")?;
 
@@ -226,7 +212,7 @@ impl GenkaiPointDatabase for MongoDb {
 
         self.inner
             .collection::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
-            .insert_one(session, None)
+            .insert_one(session)
             .await
             .context("failed to insert document")?;
 
@@ -237,15 +223,12 @@ impl GenkaiPointDatabase for MongoDb {
         let exists = self
             .inner
             .collection::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
-            .aggregate(
-                Some(doc! {
-                    "$match": {
-                        "user_id": user_id.to_string(),
-                        "left_at": { "$exists": false },
-                    }
-                }),
-                None,
-            )
+            .aggregate(Some(doc! {
+                "$match": {
+                    "user_id": user_id.to_string(),
+                    "left_at": { "$exists": false },
+                }
+            }))
             .await
             .context("failed to aggregate")?
             .next()
@@ -267,7 +250,6 @@ impl GenkaiPointDatabase for MongoDb {
                     "left_at": { "$exists": false }
                 },
                 doc! { "$set": { "left_at": left_at } },
-                None,
             )
             .await
             .context("failed to find unclosed session and overwrite left_at field")?;
@@ -282,7 +264,7 @@ impl GenkaiPointDatabase for MongoDb {
     async fn get_users_all_sessions(&self, user_id: u64) -> Result<Vec<Session>> {
         self.inner
             .collection::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
-            .find(doc! { "user_id": user_id.to_string() }, None)
+            .find(doc! { "user_id": user_id.to_string() })
             .await
             .context("failed to find")?
             .map(|x| x.map(|x| x.into()))
@@ -294,22 +276,19 @@ impl GenkaiPointDatabase for MongoDb {
     async fn get_all_users_who_has_unclosed_session(&self) -> Result<Vec<u64>> {
         self.inner
             .collection::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
-            .aggregate(
-                vec![
-                    doc! {
-                        "$match": {
-                            "left_at": { "$exists": false }
-                        }
-                    },
-                    doc! {
-                        "$project": {
-                            "_id": false,
-                            "user_id": true
-                        }
-                    },
-                ],
-                None,
-            )
+            .aggregate(vec![
+                doc! {
+                    "$match": {
+                        "left_at": { "$exists": false }
+                    }
+                },
+                doc! {
+                    "$project": {
+                        "_id": false,
+                        "user_id": true
+                    }
+                },
+            ])
             .await
             .context("failed to aggregate")?
             .map(|x| {
@@ -328,7 +307,7 @@ impl GenkaiPointDatabase for MongoDb {
     async fn get_all_sessions(&self) -> Result<Vec<Session>> {
         self.inner
             .collection::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
-            .find(None, None)
+            .find(doc! {})
             .await
             .context("failed to find")?
             .map(|x| x.map(Into::into))
@@ -348,10 +327,8 @@ impl GenkaiAuthDatabase for MongoDb {
             .find_one_and_update(
                 doc! { "user_id": &user_id },
                 doc! { "$set": { "pgp_pub_key": key } },
-                FindOneAndUpdateOptions::builder()
-                    .upsert(Some(true))
-                    .build(),
             )
+            .upsert(true)
             .await
             .context("failed to upsert")?;
 
@@ -363,7 +340,7 @@ impl GenkaiAuthDatabase for MongoDb {
 
         self.inner
             .collection::<GenkaiAuthData>(GENKAI_AUTH_COLLECTION_NAME)
-            .find_one(doc! { "user_id": &user_id }, None)
+            .find_one(doc! { "user_id": &user_id })
             .await
             .context("failed to find pgp key")
             .map(|x| x.and_then(|x| x.pgp_pub_key))
@@ -377,10 +354,8 @@ impl GenkaiAuthDatabase for MongoDb {
             .find_one_and_update(
                 doc! { "user_id": &user_id },
                 doc! { "$set": { "token": token } },
-                FindOneAndUpdateOptions::builder()
-                    .upsert(Some(true))
-                    .build(),
             )
+            .upsert(true)
             .await
             .context("failed to upsert")?;
 
@@ -395,10 +370,8 @@ impl GenkaiAuthDatabase for MongoDb {
             .find_one_and_update(
                 doc! { "user_id": &user_id },
                 doc! { "$unset": { "token": "" } },
-                FindOneAndUpdateOptions::builder()
-                    .upsert(Some(true))
-                    .build(),
             )
+            .upsert(true)
             .await
             .context("failed to upsert")?;
 
@@ -410,7 +383,7 @@ impl GenkaiAuthDatabase for MongoDb {
 
         self.inner
             .collection::<GenkaiAuthData>(GENKAI_AUTH_COLLECTION_NAME)
-            .find_one(doc! { "user_id": &user_id }, None)
+            .find_one(doc! { "user_id": &user_id })
             .await
             .context("failed to find pgp key")
             .map(|x| x.and_then(|x| x.token))
@@ -420,11 +393,11 @@ impl GenkaiAuthDatabase for MongoDb {
 impl MongoDb {
     async fn aggregate_one<T: DeserializeOwned>(
         &self,
-        collection: &Collection<impl Sized>, // we don't care about what collection have.
+        collection: &Collection<impl Send + Sync>, // we don't care about what collection have.
         pipeline: impl IntoIterator<Item = Document>,
     ) -> Result<T> {
         let doc = collection
-            .aggregate(pipeline, None)
+            .aggregate(pipeline)
             .await
             .context("failed to aggregate")?
             .next()
@@ -477,7 +450,7 @@ impl MeigenDatabase for MongoDb {
         };
 
         collection
-            .insert_one(MongoMeigen::from_model(meigen.clone()), None)
+            .insert_one(MongoMeigen::from_model(meigen.clone()))
             .await
             .context("failed to insert document")?;
 
@@ -488,7 +461,7 @@ impl MeigenDatabase for MongoDb {
         let Some(d) = self
             .inner
             .collection::<MongoMeigen>(MEIGEN_COLLECTION_NAME)
-            .find_one(doc! { "id": id.0 }, None)
+            .find_one(doc! { "id": id.0 })
             .await
             .context("failed to find meigen")?
         else {
@@ -504,7 +477,7 @@ impl MeigenDatabase for MongoDb {
     async fn delete(&self, id: MeigenId) -> Result<IsUpdated> {
         self.inner
             .collection::<MongoMeigen>(MEIGEN_COLLECTION_NAME)
-            .delete_one(doc! { "id": id.0 }, None)
+            .delete_one(doc! { "id": id.0 })
             .await
             .context("failed to delete meigen")
             .map(|x| x.deleted_count == 1)
@@ -546,7 +519,7 @@ impl MeigenDatabase for MongoDb {
 
         self.inner
             .collection::<MongoMeigen>(MEIGEN_COLLECTION_NAME)
-            .aggregate(pipeline, None)
+            .aggregate(pipeline)
             .await
             .context("failed to aggregate")?
             .map(|x| x.context("failed to decode document"))
@@ -576,7 +549,6 @@ impl MeigenDatabase for MongoDb {
             .update_one(
                 doc! { "id": id.0 },
                 doc! { "$addToSet": { "loved_user_id": loved_user_id.to_string() } },
-                None,
             )
             .await
             .context("failed to append loved user id")
@@ -589,7 +561,6 @@ impl MeigenDatabase for MongoDb {
             .update_one(
                 doc! { "id": id.0 },
                 doc! { "$pull": { "loved_user_id": loved_user_id.to_string() } },
-                None,
             )
             .await
             .context("failed to remove loved user id")

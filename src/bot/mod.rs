@@ -30,6 +30,7 @@ pub(crate) trait Attachment: Send + Sync {
 #[async_trait]
 pub(crate) trait User: Send + Sync {
     fn id(&self) -> u64;
+    #[allow(unused)]
     fn name(&self) -> &str;
     async fn dm(&self, msg: SendMessage<'_>) -> Result<()>;
 

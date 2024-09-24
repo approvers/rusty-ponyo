@@ -8,7 +8,7 @@ use {
     },
     anyhow::{anyhow, Context as _, Result},
     chrono::Utc,
-    image::io::Reader as ImageReader,
+    image::ImageReader,
     libwebp_sys::{WebPConfig, WebPPicture, WebPPreset},
     static_assertions::const_assert,
     std::{io::Cursor, mem::MaybeUninit},
