@@ -15,6 +15,7 @@ run cd \
  && git clone https://gitlab.archlinux.org/archlinux/packaging/packages/gmp.git \
  && cd gmp \
  && echo 'options=(!strip staticlibs)' >> PKGBUILD \
+ && sed -i 's|https://gmplib.org/download/gmp/gmp|https://ftp.gnu.org/gnu/gmp/gmp|' PKGBUILD \
  && MAKEFLAGS="-j$(nproc)" makepkg --skippgpcheck --nocheck --noconfirm
 user root
 run mv /home/kawak/gmp/gmp-*.pkg.* /gmp
