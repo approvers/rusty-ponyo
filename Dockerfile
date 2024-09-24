@@ -8,12 +8,6 @@ run cargo --version
 
 run cargo install cargo-chef
 
-# workaround for https://gitlab.com/sequoia-pgp/nettle-sys/-/issues/16
-env NETTLE_STATIC=yes \
-    HOGWEED_STATIC=yes \
-    GMP_STATIC=yes \
-    SYSROOT=/dummy
-
 # ---
 
 from base as plan
