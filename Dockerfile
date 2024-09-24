@@ -8,14 +8,16 @@ run cargo --version
 
 run cargo install cargo-chef
 
-env NETTLE_STATIC=yes
+env NETTLE_STATIC=yes \
+    HOGWEED_STATIC=yes \
+    GMP_STATIC=yes \
+    SYSROOT=/dummy
 
 # ---
 
 from base as plan
 
-copy . .
-run cargo chef prepare --recipe-path recipe.json
+run --mount=type=bind,target=. cargo chef prepare --recipe-path /recipe.json
 
 # ---
 
@@ -33,16 +35,18 @@ run --mount=type=cache,target=/var/lib/apt,sharing=locked \
       cmake llvm nettle-dev \
       pkg-config fontforge
 
-copy --from=plan /src/download_font.sh .
-run ./download_font.sh
+run --mount=type=bind,source=download_font.sh,target=download_font.sh \
+    ./download_font.sh
 
-copy --from=plan /src/recipe.json .
-run cargo chef cook \
-    --recipe-path recipe.json \
-    --release --no-default-features --features ${FEATURES}
+copy --from=plan /recipe.json .
+run --mount=type=cache,target=/src/target/,sharing=locked \
+    cargo chef cook \
+      --recipe-path recipe.json \
+      --release --no-default-features --features ${FEATURES}
 
 copy . .
-run cargo build --release --no-default-features --features ${FEATURES}
+run --mount=type=cache,target=/src/target/,sharing=locked \
+    cargo build --release --no-default-features --features ${FEATURES}
 
 # ---
 
