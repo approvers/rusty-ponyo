@@ -19,14 +19,16 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: install native deps
         run: sudo apt update && sudo apt install clang llvm pkg-config nettle-dev fontforge
-      - run: cargo install cargo-udeps --locked
+      - run: |
+          rustup toolchain install nightly
+          cargo +nightly install cargo-udeps --locked
 
       - run: cargo fmt -- --check
 
       - run: ./download_font.sh
 
-      - run: cargo udeps --no-default-features --features dev
-      - run: cargo udeps --no-default-features --features discord_client,mongo_db,plot_plotters_static
+      - run: cargo +nightly udeps --no-default-features --features dev
+      - run: cargo +nightly udeps --no-default-features --features discord_client,mongo_db,plot_plotters_static
 
       - uses: actions-rs/clippy-check@v1
         with:
