@@ -12,41 +12,17 @@ use {
     },
     anyhow::{Context as _, Result},
     bot::meigen::MeigenBot,
-    sentry::ClientInitGuard,
 };
 
 assert_one_feature!("discord_client", "console_client");
 assert_one_feature!("mongo_db", "memory_db");
 assert_one_feature!("plot_plotters", "plot_matplotlib", "plot_charming");
 
-fn setup_sentry() -> Option<ClientInitGuard> {
-    let Ok(sentry_dsn) = env_var("SENTRY_DSN") else {
-        #[cfg(not(debug_assertions))]
-        panic!("SENTRY_DSN is not set");
-        #[cfg(debug_assertions)]
-        return None;
-    };
-
-    let guard = sentry::init((
-        sentry_dsn,
-        sentry::ClientOptions {
-            release: sentry::release_name!(),
-            ..Default::default()
-        },
-    ));
-
-    tracing::info!("sentry initialized");
-
-    Some(guard)
-}
-
 fn main() -> Result<()> {
     dotenv::dotenv().ok();
 
     let use_ansi = env_var("NO_COLOR").is_err();
     tracing_subscriber::fmt().with_ansi(use_ansi).init();
-
-    let _guard = setup_sentry();
 
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()

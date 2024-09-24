@@ -111,18 +111,6 @@ features = [
 ]
 
 
-[dependencies.sentry]
-version = "0.34"
-default-features = false
-features = [
-    "backtrace",
-    "contexts",
-    "panic",
-    "debug-images",
-    "reqwest",
-    "rustls",
-]
-
 [dev-dependencies]
 pretty_assertions = "1"
 
