@@ -36,18 +36,11 @@ run cd \
  && git clone https://gitlab.archlinux.org/archlinux/packaging/packages/nettle.git \
  && cd nettle \
  && echo 'options=(!strip staticlibs)' >> PKGBUILD \
- && sed -i 's/--disable-static/--disable-shared/g' PKGBUILD \
+# && sed -i 's/--disable-static/--disable-shared/g' PKGBUILD \
+ && sed -i 's/--disable-static//g' PKGBUILD \
  && MAKEFLAGS="-j$(nproc)" makepkg --skippgpcheck --nocheck --noconfirm
 user root
 run pacman -R --noconfirm wget && pacman -U --noconfirm /home/kawak/nettle/nettle-*.pkg.*
-
-# なんで nettle-sys の依存ライブラリ情報が伝搬せんの？？
-run \
-  echo 'fn main() {' > build.rs \
-  && echo '  println!("cargo:rustc-link-lib=static=gmp");' >> build.rs \
-  && echo '  println!("cargo:rustc-link-lib=static=nettle");' >> build.rs \
-  && echo '  println!("cargo:rustc-link-lib=static=hogweed");' >> build.rs \
-  && echo '}' >> build.rs
 
 copy --from=plan /recipe.json .
 run --mount=type=cache,target=/src/target/,sharing=locked \
@@ -57,19 +50,26 @@ run --mount=type=cache,target=/src/target/,sharing=locked \
 
 copy . .
 
-env NETTLE_STATIC=yes
+env NETTLE_STATIC=yes \
+    HOGWEED_STATIC=yes \
+    GMP_STATIC=yes \
+    SYSROOT=/dummy
+
+run \
+    echo 'fn main() {' > build.rs \
+ && echo '  println!("cargo::rustc-link-arg=/usr/lib/libhogweed.a");' >> build.rs \
+ && echo '  println!("cargo::rustc-link-arg=/usr/lib/libnettle.a");' >> build.rs \
+ && echo '  println!("cargo::rustc-link-arg=/usr/lib/libgmp.a");' >> build.rs \
+ && echo '}' >> build.rs
 
 run --mount=type=cache,target=/src/target/,sharing=locked \
-   cargo build --release --no-default-features --features prod -vv >a 2>&1 | true
-
-run --mount=type=cache,target=/var/cache/pacman,sharing=locked \
-    pacman -Syu --noconfirm --needed neovim
-
+   cargo build --release --no-default-features --features prod
 
 # ---
 
 # from gcr.io/distroless/cc-debian11
 #
-# copy --from=build /src/target/release/rusty-ponyo /
+# copy --from=build /app/target/release/rusty-ponyo /
 #
 # cmd ["/rusty-ponyo"]
+#
