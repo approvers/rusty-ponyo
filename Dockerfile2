@@ -69,6 +69,8 @@ run --mount=type=cache,target=/src/target/,sharing=locked \
 
 from gcr.io/distroless/cc-debian11
 
+copy --from=build /usr/lib/libc.so.6 /usr/lib/libm.so.6 /usr/lib/libgcc_s.so.1 /usr/lib
+copy --from=build /usr/lib64/ld-linux-x86-64.so.2 /lib64/
 copy --from=build /app/target/release/rusty-ponyo /
 
 cmd ["/rusty-ponyo"]

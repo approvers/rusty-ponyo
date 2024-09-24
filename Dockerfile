@@ -51,7 +51,7 @@ run --mount=type=cache,target=/src/target/,sharing=locked \
 
 # ---
 
-from gcr.io/distroless/cc-debian11
+from gcr.io/distroless/cc-debian11:debug
 
 copy --from=build /rusty-ponyo /
 
