@@ -4,6 +4,8 @@ use {
     std::{future::Future, pin::Pin},
 };
 
+const KAWAEMON_DISCORD_USER_ID: u64 = 391857452360007680;
+
 /// 変更が生じた場合 true
 pub type IsUpdated = bool;
 
@@ -12,9 +14,12 @@ pub mod auth;
 pub mod genkai_point;
 pub mod gh;
 pub mod meigen;
+pub mod uo;
 pub mod vc_diff;
 
+#[async_trait]
 pub(crate) trait Message: Send + Sync {
+    async fn reply(&self, msg: &str) -> Result<()>;
     fn author(&self) -> &dyn User;
     fn content(&self) -> &str;
     fn attachments(&self) -> &[&dyn Attachment];

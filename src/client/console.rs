@@ -86,6 +86,8 @@ impl<'a> ConsoleClient<'a> {
                 };
 
                 let message = ConsoleMessage {
+                    service_name: service.name(),
+                    begin,
                     content: content.clone(),
                     attachments: attachments.clone(),
                     user: ConsoleUser {
@@ -105,12 +107,25 @@ impl<'a> ConsoleClient<'a> {
 }
 
 struct ConsoleMessage<'a> {
+    service_name: &'a str,
+    begin: Instant,
     content: String,
     attachments: Vec<&'a dyn Attachment>,
     user: ConsoleUser<'a>,
 }
 
+#[async_trait]
 impl Message for ConsoleMessage<'_> {
+    async fn reply(&self, content: &str) -> Result<()> {
+        println!(
+            "({}, reply, {}ms): {}",
+            self.service_name,
+            self.begin.elapsed().as_millis(),
+            content
+        );
+        Ok(())
+    }
+
     fn content(&self) -> &str {
         &self.content
     }

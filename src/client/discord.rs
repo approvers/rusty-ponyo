@@ -332,11 +332,12 @@ impl EventHandler for EvHandler {
             .insert(message.author.id, message.author.name.clone());
 
         let converted_message = DiscordMessage {
-            content: message.content.clone(),
+            ctx: &ctx,
+            message: &message,
             attachments: converted_attachments.iter().map(|x| x as _).collect(),
             author: DiscordAuthor {
                 id: message.author.id.get(),
-                name: message.author.name,
+                name: &message.author.name,
                 ctx: &ctx,
             },
         };
@@ -360,14 +361,24 @@ struct NicknameCache(HashMap<SerenityUserId, String>);
 struct IsBotCache(HashMap<SerenityUserId, bool>);
 
 struct DiscordMessage<'a> {
-    content: String,
+    ctx: &'a SerenityContext,
+    message: &'a SerenityMessage,
     attachments: Vec<&'a dyn Attachment>,
     author: DiscordAuthor<'a>,
 }
 
+#[async_trait]
 impl Message for DiscordMessage<'_> {
+    async fn reply(&self, text: &str) -> Result<()> {
+        self.message
+            .reply_ping(&self.ctx.http, text)
+            .await
+            .context("failed to reply with discord feature")?;
+        Ok(())
+    }
+
     fn content(&self) -> &str {
-        &self.content
+        &self.message.content
     }
 
     fn attachments(&self) -> &[&dyn Attachment] {
@@ -382,7 +393,7 @@ impl Message for DiscordMessage<'_> {
 struct DiscordAuthor<'a> {
     id: u64,
     #[allow(unused)]
-    name: String,
+    name: &'a str,
     ctx: &'a SerenityContext,
 }
 
@@ -393,7 +404,7 @@ impl<'a> User for DiscordAuthor<'a> {
     }
 
     fn name(&self) -> &str {
-        &self.name
+        self.name
     }
 
     async fn dm(&self, msg: SendMessage<'_>) -> Result<()> {

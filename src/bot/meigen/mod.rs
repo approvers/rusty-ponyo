@@ -1,5 +1,7 @@
 use {
-    crate::bot::{parse_command, ui, BotService, Context, IsUpdated, Message},
+    crate::bot::{
+        parse_command, ui, BotService, Context, IsUpdated, Message, KAWAEMON_DISCORD_USER_ID,
+    },
     anyhow::{Context as _, Result},
     async_trait::async_trait,
     model::{Meigen, MeigenId},
@@ -220,7 +222,6 @@ impl<D: MeigenDatabase> MeigenBot<D> {
     }
 
     async fn delete(&self, caller: u64, id: MeigenId) -> Result<String> {
-        const KAWAEMON_DISCORD_USER_ID: u64 = 391857452360007680;
         if caller != KAWAEMON_DISCORD_USER_ID {
             return Ok("名言削除はかわえもんにしか出来ません".into());
         }
