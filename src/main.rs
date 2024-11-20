@@ -11,7 +11,7 @@ use {
         vc_diff::VcDiffBot,
     },
     anyhow::{Context as _, Result},
-    bot::meigen::MeigenBot,
+    bot::{meigen::MeigenBot, uo::UoBot},
 };
 
 assert_one_feature!("discord_client", "console_client");
@@ -68,9 +68,25 @@ async fn async_main() -> Result<()> {
         .add_service(VcDiffBot::new());
 
     #[cfg(feature = "console_client")]
-    client.run().await?;
+    {
+        client.add_service(UoBot::new());
+        client.run().await?;
+    }
     #[cfg(feature = "discord_client")]
-    client.run(&env_var("DISCORD_TOKEN")?).await?;
+    {
+        let token = env_var("DISCORD_TOKEN")?;
+        let base = tokio::spawn(async move { client.run(&token).await });
+
+        let token = env_var("DISCORD_UO_TOKEN")?;
+        let mut uo_client = crate::client::discord::DiscordClient::new();
+        uo_client.add_service(UoBot::new());
+        let uo = tokio::spawn(async move { uo_client.run(&token).await });
+
+        tokio::select! {
+            r = base => r??,
+            r = uo => r??,
+        }
+    }
 
     Ok(())
 }

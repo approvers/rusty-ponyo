@@ -319,7 +319,11 @@ mod test {
         let output = output.into();
 
         struct Msg(&'static str);
+        #[async_trait]
         impl Message for Msg {
+            async fn reply(&self, _msg: &str) -> Result<()> {
+                unimplemented!()
+            }
             fn author(&self) -> &dyn User {
                 unimplemented!()
             }

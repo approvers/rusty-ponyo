@@ -12,9 +12,12 @@ pub mod auth;
 pub mod genkai_point;
 pub mod gh;
 pub mod meigen;
+pub mod uo;
 pub mod vc_diff;
 
+#[async_trait]
 pub(crate) trait Message: Send + Sync {
+    async fn reply(&self, msg: &str) -> Result<()>;
     fn author(&self) -> &dyn User;
     fn content(&self) -> &str;
     fn attachments(&self) -> &[&dyn Attachment];
