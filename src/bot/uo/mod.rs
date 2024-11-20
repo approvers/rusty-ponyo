@@ -1,4 +1,4 @@
-use crate::bot::{parse_command, ui, BotService, Context, Message};
+use crate::bot::{parse_command, ui, BotService, Context, Message, KAWAEMON_DISCORD_USER_ID};
 use anyhow::{Context as _, Result};
 use async_trait::async_trait;
 use tokio::sync::Mutex;
@@ -68,7 +68,6 @@ impl BotService for UoBot {
                 format!("```{UO}確率: {prob}%```")
             }
             Reroll => {
-                const KAWAEMON_DISCORD_USER_ID: u64 = 391857452360007680;
                 if msg.author().id() == KAWAEMON_DISCORD_USER_ID {
                     self.reroll().await;
                     "振り直しました".to_owned()
