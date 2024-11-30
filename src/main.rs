@@ -1,6 +1,7 @@
 mod bot;
 mod client;
 mod db;
+mod trait_ext;
 
 use {
     crate::bot::{

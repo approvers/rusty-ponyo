@@ -1,14 +1,17 @@
 use {
-    crate::bot::{
-        alias::{model::MessageAlias, MessageAliasDatabase},
-        auth::GenkaiAuthDatabase,
-        genkai_point::{model::Session, CreateNewSessionResult, GenkaiPointDatabase},
-        meigen::{
-            self,
-            model::{Meigen, MeigenId},
-            MeigenDatabase,
+    crate::{
+        bot::{
+            alias::{model::MessageAlias, MessageAliasDatabase},
+            auth::GenkaiAuthDatabase,
+            genkai_point::{model::Session, CreateNewSessionResult, GenkaiPointDatabase},
+            meigen::{
+                self,
+                model::{Meigen, MeigenId},
+                MeigenDatabase, SortDirection,
+            },
+            IsUpdated,
         },
-        IsUpdated,
+        trait_ext::TakeAndApplyIf as _,
     },
     anyhow::{anyhow, Context as _, Result},
     async_trait::async_trait,
@@ -337,9 +340,32 @@ impl MeigenDatabase for MemoryDB {
                     && options.content.map_or(true, |c| x.content.contains(c))
             })
             .collect::<Vec<_>>();
-        if options.random {
-            meigens.shuffle(&mut rand::thread_rng());
+
+        if let Some(sort_key) = options.sort {
+            let dir = options
+                .dir
+                .unwrap_or(sort_key.default_sort_dir())
+                .take_and_apply_if(options.reverse, |dir| dir.reversed());
+
+            use meigen::SortKey::*;
+            match sort_key {
+                Love => meigens.sort_by_key_with_dir(
+                    |meigen| meigen.loved_user_id.len(),
+                    dir
+                ),
+                Length => meigens.sort_by_key_with_dir(
+                    |meigen| meigen.content.len(),
+                    dir
+                ),
+                Randomized => {
+                    meigens.shuffle(&mut rand::thread_rng());
+                    if options.reverse {
+                        meigens.reverse()
+                    }
+                }
+            }
         }
+
         Ok(meigens
             .into_iter()
             .skip(options.offset as usize)
@@ -381,5 +407,30 @@ impl MeigenDatabase for MemoryDB {
 
         meigen.loved_user_id.swap_remove(index);
         Ok(true)
+    }
+}
+
+pub trait SortByKeyWithDirTraitExt<I> {
+    fn sort_by_key_with_dir<FnK, FnKR>(&mut self, key: FnK, dir: SortDirection)
+    where
+        FnK: Fn(&I) -> FnKR,
+        FnKR: Ord;
+}
+
+impl<I> SortByKeyWithDirTraitExt<I> for Vec<I> {
+    fn sort_by_key_with_dir<FnK, FnKR>(&mut self, key: FnK, dir: SortDirection)
+    where
+        FnK: Fn(&I) -> FnKR,
+        FnKR: Ord,
+    {
+        self.sort_by(|left, right| {
+            let left_key = key(left);
+            let right_key = key(right);
+
+            match dir {
+                SortDirection::Asc => left_key.cmp(&right_key),
+                SortDirection::Desc => left_key.cmp(&right_key).reverse(),
+            }
+        })
     }
 }

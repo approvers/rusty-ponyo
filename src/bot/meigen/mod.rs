@@ -4,10 +4,48 @@ use {
     },
     anyhow::{Context as _, Result},
     async_trait::async_trait,
+    clap::{ArgGroup, ValueEnum},
     model::{Meigen, MeigenId},
 };
 
 pub mod model;
+
+#[derive(ValueEnum, Clone, Debug, PartialEq, Eq)]
+pub enum SortKey {
+    Love,
+    Length,
+    Randomized,
+}
+impl SortKey {
+    pub fn default_sort_dir(&self) -> SortDirection {
+        match self {
+            SortKey::Love => SortDirection::Desc,
+            SortKey::Length => SortDirection::Desc,
+            // sorts by ID after picking the random genkai
+            SortKey::Randomized => SortDirection::Asc,
+        }
+    }
+}
+
+#[derive(ValueEnum, Clone, Debug, PartialEq, Eq)]
+pub enum SortDirection {
+    #[clap(alias = "a")]
+    Asc,
+    #[clap(alias = "d")]
+    Desc,
+}
+impl SortDirection {
+    pub fn reversed(&self) -> Self {
+        use SortDirection::*;
+        match self {
+            Asc => Desc,
+            Desc => Asc,
+        }
+    }
+    pub fn asc(&self) -> bool {
+        self == &SortDirection::Asc
+    }
+}
 
 #[derive(Default)]
 pub struct FindOptions<'a> {
@@ -15,7 +53,9 @@ pub struct FindOptions<'a> {
     pub content: Option<&'a str>,
     pub offset: u32,
     pub limit: u8,
-    pub random: bool,
+    pub sort: Option<SortKey>,
+    pub dir: Option<SortDirection>,
+    pub reverse: bool,
 }
 
 #[async_trait]
@@ -75,6 +115,23 @@ enum Command {
     Status,
 
     /// 名言をリスト表示します
+    #[clap(group(
+        ArgGroup::new("sort_conflict")
+            .args(&["sort"])
+            .requires("sort")
+            .conflicts_with("random")
+    ))] // --sort and --random conflicts
+    #[clap(group(
+        ArgGroup::new("dir_conflict")
+            .args(&["dir"])
+            .requires("dir")
+            .conflicts_with("reverse")
+    ))] // --dir and --reverse conflicts
+    #[clap(group(
+        ArgGroup::new("dir_group")
+            .args(&["dir"])
+            .requires_all(["sort", "dir"])
+    ))] // --dir requires --sort
     List {
         /// 表示する名言のオフセット
         #[clap(long)]
@@ -88,7 +145,7 @@ enum Command {
         limit: u8,
 
         /// 指定された場合、検索条件に合致する名言の中からランダムに選び出して出力します
-        #[clap(short, long)]
+        #[clap(short = 'R', long)]
         #[clap(default_value_t = false)]
         random: bool,
 
@@ -99,6 +156,20 @@ enum Command {
         /// 指定した文字列を含む名言をリスト表示します
         #[clap(long)]
         content: Option<String>,
+
+        /// 指定した項目でソートします。
+        /// "--random" とは一緒に使えません。
+        #[clap(value_enum, long)]
+        sort: Option<SortKey>,
+
+        /// ソートの順番を入れ替えます。
+        #[clap(value_enum, long)]
+        dir: Option<SortDirection>,
+
+        /// 順番を入れ替えます。
+        #[clap(short, long, alias = "rev")]
+        #[clap(default_value_t = false)]
+        reverse: bool,
     },
 
     /// 名言を削除します
@@ -149,13 +220,22 @@ impl<D: MeigenDatabase> BotService for MeigenBot<D> {
                 random,
                 author,
                 content,
+                sort,
+                dir,
+                reverse,
             } => {
                 self.search(FindOptions {
                     author: author.as_deref(),
                     content: content.as_deref(),
-                    random,
                     offset,
                     limit,
+                    sort: if random {
+                        Some(SortKey::Randomized)
+                    } else {
+                        sort
+                    },
+                    dir,
+                    reverse,
                 })
                 .await?
             }
@@ -210,13 +290,10 @@ impl<D: MeigenDatabase> MeigenBot<D> {
     }
 
     async fn search(&self, opt: FindOptions<'_>) -> Result<String> {
-        let mut res = self.db.search(opt).await?;
-
+        let res = self.db.search(opt).await?;
         if res.is_empty() {
             return Ok("条件に合致する名言が見つかりませんでした".into());
         }
-
-        res.sort_unstable_by_key(|x| x.id);
 
         Ok(list(&res))
     }
