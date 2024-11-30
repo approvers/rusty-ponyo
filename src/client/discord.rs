@@ -2,6 +2,7 @@ use {
     crate::bot::{Attachment, BotService, Context, Message, SendMessage, User},
     anyhow::{Context as _, Result},
     async_trait::async_trait,
+    rusty_ponyo::{APPROVERS_DEFAULT_CHANNEL_ID, APPROVERS_GUILD_ID},
     serenity::{
         builder::{CreateAttachment, CreateMessage},
         model::{
@@ -81,8 +82,6 @@ impl DiscordClient {
 }
 
 // TODO: should be configurable
-const APPROVERS_GUILD_ID: u64 = 683939861539192860;
-const APPROVERS_DEFAULT_CHANNEL_ID: u64 = 690909527461199922;
 
 struct EvHandlerInner {
     services: Vec<Box<dyn BotService>>,

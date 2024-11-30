@@ -1,6 +1,7 @@
-use crate::bot::{parse_command, ui, BotService, Context, Message, KAWAEMON_DISCORD_USER_ID};
+use crate::bot::{parse_command, ui, BotService, Context, Message};
 use anyhow::{Context as _, Result};
 use async_trait::async_trait;
+use rusty_ponyo::KAWAEMON_DISCORD_USER_ID;
 use tokio::sync::Mutex;
 
 const NAME: &str = "rusty_ponyo::bot::uo";

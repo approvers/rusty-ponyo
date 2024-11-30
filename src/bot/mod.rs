@@ -4,8 +4,6 @@ use {
     std::{future::Future, pin::Pin},
 };
 
-const KAWAEMON_DISCORD_USER_ID: u64 = 391857452360007680;
-
 /// 変更が生じた場合 true
 pub type IsUpdated = bool;
 

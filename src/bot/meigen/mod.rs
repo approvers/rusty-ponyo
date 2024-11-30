@@ -1,10 +1,9 @@
 use {
-    crate::bot::{
-        parse_command, ui, BotService, Context, IsUpdated, Message, KAWAEMON_DISCORD_USER_ID,
-    },
+    crate::bot::{parse_command, ui, BotService, Context, IsUpdated, Message},
     anyhow::{Context as _, Result},
     async_trait::async_trait,
     model::{Meigen, MeigenId},
+    rusty_ponyo::KAWAEMON_DISCORD_USER_ID,
 };
 
 pub mod model;
