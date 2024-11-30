@@ -11,7 +11,6 @@ use {
         IsUpdated,
     },
     anyhow::{anyhow, Context as _, Result},
-    async_trait::async_trait,
     chrono::{DateTime, Duration, Utc},
     rand::seq::SliceRandom,
     serde::Serialize,
@@ -62,7 +61,6 @@ impl MemoryDBInner {
     }
 }
 
-#[async_trait]
 impl MessageAliasDatabase for MemoryDB {
     async fn save(&self, alias: MessageAlias) -> Result<()> {
         let mut me = self.inner().await;
@@ -124,7 +122,6 @@ impl MessageAliasDatabase for MemoryDB {
     }
 }
 
-#[async_trait]
 impl GenkaiPointDatabase for MemoryDB {
     async fn create_new_session(
         &self,
@@ -228,7 +225,6 @@ struct AuthEntry {
     token: Option<String>,
 }
 
-#[async_trait]
 impl GenkaiAuthDatabase for MemoryDB {
     async fn register_pgp_key(&self, user_id: u64, key: &str) -> Result<()> {
         self.inner()
@@ -282,7 +278,6 @@ impl GenkaiAuthDatabase for MemoryDB {
     }
 }
 
-#[async_trait]
 impl MeigenDatabase for MemoryDB {
     async fn save(
         &self,

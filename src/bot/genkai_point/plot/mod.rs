@@ -20,7 +20,7 @@ pub(crate) mod charming;
 
 pub(super) async fn plot<P: Plotter + Send>(
     db: &impl GenkaiPointDatabase,
-    ctx: &dyn Context,
+    ctx: &impl Context,
     plotter: &P,
     top: usize,
 ) -> Result<Option<Vec<u8>>> {

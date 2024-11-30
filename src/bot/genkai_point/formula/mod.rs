@@ -1,4 +1,4 @@
-use {self::v3::FormulaV3, crate::bot::genkai_point::model::Session};
+use {crate::bot::genkai_point::model::Session, v3::FormulaV3};
 
 pub mod v1;
 pub mod v2;

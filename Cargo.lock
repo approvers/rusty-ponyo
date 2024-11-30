@@ -3580,7 +3580,6 @@ name = "rusty-ponyo"
 version = "2024.9.25-2"
 dependencies = [
  "anyhow",
- "async-trait",
  "bson",
  "bzip2-sys",
  "charming",

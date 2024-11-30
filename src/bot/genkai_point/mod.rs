@@ -11,10 +11,10 @@ use {
             },
             model::{Session, UserStat},
         },
-        parse_command, ui, BotService, Context, Message, SendAttachment, SendMessage,
+        parse_command, ui, BotService, Context, Message, Runtime, SendAttachment, SendMessage,
+        User,
     },
     anyhow::{Context as _, Result},
-    async_trait::async_trait,
     chrono::{DateTime, Duration, Utc},
     clap::ValueEnum,
     once_cell::sync::Lazy,
@@ -119,43 +119,53 @@ fn parse_duration(s: &str) -> Result<Duration, DurationError> {
     Ok(d)
 }
 
-#[async_trait]
 pub(crate) trait GenkaiPointDatabase: Send + Sync {
     /// Creates a new unclosed session if not exists.
     /// If the user's last session was closed before within 5minutes from now, clear its "left_at" field.
     /// If an unclosed session exists, leaves it untouched.
-    async fn create_new_session(
+    fn create_new_session(
         &self,
         user_id: u64,
         joined_at: DateTime<Utc>,
-    ) -> Result<CreateNewSessionResult>;
-    async fn unclosed_session_exists(&self, user_id: u64) -> Result<bool>;
-    async fn close_session(&self, user_id: u64, left_at: DateTime<Utc>) -> Result<()>;
-    async fn get_users_all_sessions(&self, user_id: u64) -> Result<Vec<Session>>;
-    async fn get_all_users_who_has_unclosed_session(&self) -> Result<Vec<u64>>;
-    async fn get_all_sessions(&self) -> Result<Vec<Session>>;
+    ) -> impl Future<Output = Result<CreateNewSessionResult>> + Send;
+    fn unclosed_session_exists(&self, user_id: u64) -> impl Future<Output = Result<bool>> + Send;
+    fn close_session(
+        &self,
+        user_id: u64,
+        left_at: DateTime<Utc>,
+    ) -> impl Future<Output = Result<()>> + Send;
+    fn get_users_all_sessions(
+        &self,
+        user_id: u64,
+    ) -> impl Future<Output = Result<Vec<Session>>> + Send;
+    fn get_all_users_who_has_unclosed_session(
+        &self,
+    ) -> impl Future<Output = Result<Vec<u64>>> + Send;
+    fn get_all_sessions(&self) -> impl Future<Output = Result<Vec<Session>>> + Send;
 
-    async fn get_all_users_stats(
+    fn get_all_users_stats(
         &self,
         formula: &impl GenkaiPointFormula,
-    ) -> Result<Vec<UserStat>> {
-        let sessions = self.get_all_sessions().await?;
+    ) -> impl Future<Output = Result<Vec<UserStat>>> + Send {
+        async move {
+            let sessions = self.get_all_sessions().await?;
 
-        let user_sessions = {
-            let mut map = HashMap::new();
-            for session in sessions {
-                map.entry(session.user_id)
-                    .or_insert_with(Vec::new)
-                    .push(session);
-            }
-            map
-        };
+            let user_sessions = {
+                let mut map = HashMap::new();
+                for session in sessions {
+                    map.entry(session.user_id)
+                        .or_insert_with(Vec::new)
+                        .push(session);
+                }
+                map
+            };
 
-        user_sessions
-            .into_iter()
-            .flat_map(|(_, x)| UserStat::from_sessions(&x, formula).transpose())
-            .collect::<Result<_>>()
-            .context("failed to calc userstat")
+            user_sessions
+                .into_iter()
+                .flat_map(|(_, x)| UserStat::from_sessions(&x, formula).transpose())
+                .collect::<Result<_>>()
+                .context("failed to calc userstat")
+        }
     }
 }
 
@@ -191,7 +201,7 @@ impl<D: GenkaiPointDatabase, P: Plotter> GenkaiPointBot<D, P> {
     // TODO: refactor needed
     async fn ranking<C>(
         &self,
-        ctx: &dyn Context,
+        ctx: &impl Context,
         formula: &impl GenkaiPointFormula,
         by: &str,
         sort_comparator: C,
@@ -263,7 +273,7 @@ impl<D: GenkaiPointDatabase, P: Plotter> GenkaiPointBot<D, P> {
         Ok(())
     }
 
-    async fn graph(&self, ctx: &dyn Context, n: u8) -> Result<()> {
+    async fn graph(&self, ctx: &impl Context, n: u8) -> Result<()> {
         let n = n.clamp(1, 11);
 
         let image = plot::plot(&self.db, ctx, &self.plotter, n as _).await?;
@@ -290,7 +300,7 @@ impl<D: GenkaiPointDatabase, P: Plotter> GenkaiPointBot<D, P> {
 
     async fn show(
         &self,
-        ctx: &dyn Context,
+        ctx: &impl Context,
         formula: &impl GenkaiPointFormula,
         user_id: u64,
     ) -> Result<()> {
@@ -353,13 +363,12 @@ where
     })
 }
 
-#[async_trait]
-impl<D: GenkaiPointDatabase, P: Plotter> BotService for GenkaiPointBot<D, P> {
+impl<R: Runtime, D: GenkaiPointDatabase, P: Plotter> BotService<R> for GenkaiPointBot<D, P> {
     fn name(&self) -> &'static str {
         NAME
     }
 
-    async fn on_message(&self, msg: &dyn Message, ctx: &dyn Context) -> Result<()> {
+    async fn on_message(&self, msg: &R::Message, ctx: &R::Context) -> Result<()> {
         if !msg.content().starts_with(PREFIX) {
             return Ok(());
         }
@@ -418,7 +427,7 @@ impl<D: GenkaiPointDatabase, P: Plotter> BotService for GenkaiPointBot<D, P> {
         Ok(())
     }
 
-    async fn on_vc_join(&self, ctx: &dyn Context, user_id: u64) -> Result<()> {
+    async fn on_vc_join(&self, ctx: &R::Context, user_id: u64) -> Result<()> {
         let op = self
             .db
             .create_new_session(user_id, Utc::now())
@@ -447,7 +456,7 @@ impl<D: GenkaiPointDatabase, P: Plotter> BotService for GenkaiPointBot<D, P> {
         Ok(())
     }
 
-    async fn on_vc_leave(&self, ctx: &dyn Context, user_id: u64) -> Result<()> {
+    async fn on_vc_leave(&self, ctx: &R::Context, user_id: u64) -> Result<()> {
         self.db
             .close_session(user_id, Utc::now())
             .await
@@ -496,11 +505,7 @@ impl<D: GenkaiPointDatabase, P: Plotter> BotService for GenkaiPointBot<D, P> {
         Ok(())
     }
 
-    async fn on_vc_data_available(
-        &self,
-        _ctx: &dyn Context,
-        joined_user_ids: &[u64],
-    ) -> Result<()> {
+    async fn on_vc_data_available(&self, _ctx: &R::Context, joined_user_ids: &[u64]) -> Result<()> {
         for uid in joined_user_ids {
             let op = self
                 .db

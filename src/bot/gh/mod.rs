@@ -1,7 +1,6 @@
 use {
-    crate::bot::{parse_command, ui, BotService, Context, Message},
+    crate::bot::{parse_command, ui, BotService, Context, Message, Runtime},
     anyhow::{Context as _, Result},
-    async_trait::async_trait,
     derivative::Derivative,
     once_cell::sync::Lazy,
     regex::Regex,
@@ -59,7 +58,7 @@ pub struct GitHubCodePreviewBot;
 const MAX_PREVIEW_MSG_LENGTH: usize = 2000;
 
 impl GitHubCodePreviewBot {
-    async fn on_command(&self, message: &str, ctx: &dyn Context) -> Result<()> {
+    async fn on_command(&self, message: &str, ctx: &impl Context) -> Result<()> {
         use Command::*;
 
         let Some(parsed) = parse_command::<Ui>(message, ctx).await? else {
@@ -149,13 +148,12 @@ impl GitHubCodePreviewBot {
     }
 }
 
-#[async_trait]
-impl BotService for GitHubCodePreviewBot {
+impl<R: Runtime> BotService<R> for GitHubCodePreviewBot {
     fn name(&self) -> &'static str {
         NAME
     }
 
-    async fn on_message(&self, msg: &dyn Message, ctx: &dyn Context) -> anyhow::Result<()> {
+    async fn on_message(&self, msg: &R::Message, ctx: &R::Context) -> anyhow::Result<()> {
         if msg.content().starts_with(PREFIX) {
             return self.on_command(msg.content(), ctx).await;
         }
@@ -310,7 +308,6 @@ mod test {
         pretty_assertions::assert_eq,
         std::{
             future::Future,
-            pin::Pin,
             sync::atomic::{AtomicBool, Ordering},
         },
     };
@@ -318,16 +315,45 @@ mod test {
     async fn test(input: &'static str, output: impl Into<Option<&'static str>>) {
         let output = output.into();
 
+        struct Attach;
+        impl Attachment for Attach {
+            fn name(&self) -> &str {
+                unimplemented!()
+            }
+            fn size(&self) -> usize {
+                unimplemented!()
+            }
+            async fn download(&self) -> Result<Vec<u8>> {
+                unimplemented!()
+            }
+        }
+
+        struct Usr;
+        impl User for Usr {
+            fn id(&self) -> u64 {
+                unimplemented!()
+            }
+
+            fn name(&self) -> &str {
+                unimplemented!()
+            }
+
+            async fn dm(&self, _msg: SendMessage<'_>) -> Result<()> {
+                unimplemented!()
+            }
+        }
+
         struct Msg(&'static str);
-        #[async_trait]
         impl Message for Msg {
+            type Attachment = Attach;
+            type User = Usr;
             async fn reply(&self, _msg: &str) -> Result<()> {
                 unimplemented!()
             }
-            fn author(&self) -> &dyn User {
+            fn author(&self) -> &Usr {
                 unimplemented!()
             }
-            fn attachments(&self) -> &[&dyn Attachment] {
+            fn attachments(&self) -> &[Attach] {
                 unimplemented!()
             }
             fn content(&self) -> &str {
@@ -339,7 +365,6 @@ mod test {
             called: AtomicBool,
             expected: Option<&'static str>,
         }
-        #[async_trait]
         impl Context for Ctx {
             async fn send_message(&self, _: SendMessage<'_>) -> Result<()> {
                 unimplemented!()
@@ -353,10 +378,7 @@ mod test {
                 unimplemented!()
             }
 
-            fn send_text_message<'a>(
-                &'a self,
-                text: &'a str,
-            ) -> Pin<Box<dyn Send + Future<Output = Result<()>> + 'a>> {
+            fn send_text_message(&self, text: &str) -> impl Future<Output = Result<()>> + Send {
                 match self.expected {
                     Some(expected) => {
                         assert_eq!(text, expected);
@@ -375,10 +397,19 @@ mod test {
             expected: output,
         };
 
-        GitHubCodePreviewBot
-            .on_message(&Msg(input), &ctx)
-            .await
-            .unwrap();
+        struct Rt;
+        impl Runtime for Rt {
+            type Message = Msg;
+            type Context = Ctx;
+        }
+
+        <GitHubCodePreviewBot as BotService<Rt>>::on_message(
+            &GitHubCodePreviewBot,
+            &Msg(input),
+            &ctx,
+        )
+        .await
+        .unwrap();
 
         assert!(output.is_some() == ctx.called.load(Ordering::Relaxed));
     }

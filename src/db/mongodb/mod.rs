@@ -16,7 +16,6 @@ use {
         db::mongodb::model::{GenkaiAuthData, MongoMeigen, MongoMessageAlias, MongoSession},
     },
     anyhow::{bail, Context as _, Result},
-    async_trait::async_trait,
     chrono::{DateTime, Duration, Utc},
     mongodb::{
         bson::{self, doc, oid::ObjectId, Document},
@@ -51,7 +50,6 @@ const GENKAI_POINT_COLLECTION_NAME: &str = "GenkaiPoint";
 const GENKAI_AUTH_COLLECTION_NAME: &str = "GenkaiAuth";
 const MEIGEN_COLLECTION_NAME: &str = "Meigen";
 
-#[async_trait]
 impl MessageAliasDatabase for MongoDb {
     async fn save(&self, alias: MessageAlias) -> Result<()> {
         self.inner
@@ -163,7 +161,6 @@ impl MongoDb {
     }
 }
 
-#[async_trait]
 impl GenkaiPointDatabase for MongoDb {
     async fn create_new_session(
         &self,
@@ -317,7 +314,6 @@ impl GenkaiPointDatabase for MongoDb {
     }
 }
 
-#[async_trait]
 impl GenkaiAuthDatabase for MongoDb {
     async fn register_pgp_key(&self, user_id: u64, key: &str) -> Result<()> {
         let user_id = user_id.to_string();
@@ -408,7 +404,6 @@ impl MongoDb {
     }
 }
 
-#[async_trait]
 impl MeigenDatabase for MongoDb {
     async fn save(
         &self,

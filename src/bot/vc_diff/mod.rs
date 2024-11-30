@@ -1,7 +1,6 @@
 use {
-    crate::bot::{parse_command, ui, BotService, Context, Message},
+    crate::bot::{parse_command, ui, BotService, Context, Message, Runtime},
     anyhow::{Context as _, Result},
-    async_trait::async_trait,
     chrono::{DateTime, Duration, Utc},
     once_cell::sync::Lazy,
     tokio::sync::Mutex,
@@ -62,7 +61,7 @@ impl VcDiffBot {
         true
     }
 
-    async fn notify(&self, ctx: &dyn Context, user_id: u64, joined: bool) -> Result<()> {
+    async fn notify(&self, ctx: &impl Context, user_id: u64, joined: bool) -> Result<()> {
         if !self.should_notify().await {
             return Ok(());
         }
@@ -86,13 +85,12 @@ impl VcDiffBot {
     }
 }
 
-#[async_trait]
-impl BotService for VcDiffBot {
+impl<R: Runtime> BotService<R> for VcDiffBot {
     fn name(&self) -> &'static str {
         NAME
     }
 
-    async fn on_message(&self, msg: &dyn Message, ctx: &dyn Context) -> Result<()> {
+    async fn on_message(&self, msg: &R::Message, ctx: &R::Context) -> Result<()> {
         if !msg.content().starts_with(PREFIX) {
             return Ok(());
         }
@@ -131,11 +129,11 @@ impl BotService for VcDiffBot {
         Ok(())
     }
 
-    async fn on_vc_join(&self, ctx: &dyn Context, user_id: u64) -> Result<()> {
+    async fn on_vc_join(&self, ctx: &R::Context, user_id: u64) -> Result<()> {
         self.notify(ctx, user_id, true).await
     }
 
-    async fn on_vc_leave(&self, ctx: &dyn Context, user_id: u64) -> Result<()> {
+    async fn on_vc_leave(&self, ctx: &R::Context, user_id: u64) -> Result<()> {
         self.notify(ctx, user_id, false).await
     }
 }

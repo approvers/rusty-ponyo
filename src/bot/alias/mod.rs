@@ -4,10 +4,10 @@ pub(crate) mod model;
 use {
     crate::bot::{
         alias::model::MessageAlias, parse_command, ui, BotService, Context, IsUpdated, Message,
-        SendAttachment, SendMessage,
+        Runtime, SendAttachment, SendMessage,
     },
     anyhow::Result,
-    async_trait::async_trait,
+    std::future::Future,
 };
 
 const NAME: &str = "rusty_ponyo::bot::alias";
@@ -50,27 +50,29 @@ enum Command {
     },
 }
 
-#[async_trait]
 pub(crate) trait MessageAliasDatabase: Send + Sync {
-    async fn save(&self, alias: MessageAlias) -> Result<()>;
-    async fn get(&self, key: &str) -> Result<Option<MessageAlias>>;
-    async fn get_and_increment_usage_count(&self, key: &str) -> Result<Option<MessageAlias>>;
-    async fn delete(&self, key: &str) -> Result<IsUpdated>;
-    async fn len(&self) -> Result<u32>;
-    async fn usage_count_top_n(&self, n: usize) -> Result<Vec<MessageAlias>>;
+    fn save(&self, alias: MessageAlias) -> impl Future<Output = Result<()>> + Send;
+    fn get(&self, key: &str) -> impl Future<Output = Result<Option<MessageAlias>>> + Send;
+    fn get_and_increment_usage_count(
+        &self,
+        key: &str,
+    ) -> impl Future<Output = Result<Option<MessageAlias>>> + Send;
+    fn delete(&self, key: &str) -> impl Future<Output = Result<IsUpdated>> + Send;
+    fn len(&self) -> impl Future<Output = Result<u32>> + Send;
+    fn usage_count_top_n(&self, n: usize)
+        -> impl Future<Output = Result<Vec<MessageAlias>>> + Send;
 }
 
 pub(crate) struct MessageAliasBot<D: MessageAliasDatabase> {
     db: D,
 }
 
-#[async_trait]
-impl<D: MessageAliasDatabase> BotService for MessageAliasBot<D> {
+impl<R: Runtime, D: MessageAliasDatabase> BotService<R> for MessageAliasBot<D> {
     fn name(&self) -> &'static str {
         NAME
     }
 
-    async fn on_message(&self, msg: &dyn Message, ctx: &dyn Context) -> Result<()> {
+    async fn on_message(&self, msg: &R::Message, ctx: &R::Context) -> Result<()> {
         if msg.content().starts_with(PREFIX) {
             if let Some(msg) = self.on_command(msg, ctx).await? {
                 ctx.send_message(SendMessage {
@@ -94,7 +96,11 @@ impl<D: MessageAliasDatabase> MessageAliasBot<D> {
         Self { db }
     }
 
-    async fn on_command(&self, message: &dyn Message, ctx: &dyn Context) -> Result<Option<String>> {
+    async fn on_command(
+        &self,
+        message: &impl Message,
+        ctx: &impl Context,
+    ) -> Result<Option<String>> {
         let Some(parsed) = parse_command::<Ui>(message.content(), ctx).await? else {
             return Ok(None);
         };
@@ -117,7 +123,7 @@ impl<D: MessageAliasDatabase> MessageAliasBot<D> {
         }
     }
 
-    async fn send_alias(&self, ctx: &dyn Context, alias: &MessageAlias) -> Result<()> {
+    async fn send_alias(&self, ctx: &impl Context, alias: &MessageAlias) -> Result<()> {
         ctx.send_message(SendMessage {
             content: &alias.message,
             attachments: &alias

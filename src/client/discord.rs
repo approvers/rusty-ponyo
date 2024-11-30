@@ -1,9 +1,13 @@
 use {
-    crate::bot::{Attachment, BotService, Context, Message, SendMessage, User},
+    super::ServiceVisitor,
+    crate::{
+        bot::{Attachment, BotService, Context, Message, Runtime, SendMessage, User},
+        client::{ListCons, ListNil, ServiceList},
+    },
     anyhow::{Context as _, Result},
-    async_trait::async_trait,
     rusty_ponyo::{APPROVERS_DEFAULT_CHANNEL_ID, APPROVERS_GUILD_ID},
     serenity::{
+        async_trait,
         builder::{CreateAttachment, CreateMessage},
         model::{
             channel::{Attachment as SerenityAttachment, Message as SerenityMessage},
@@ -34,21 +38,23 @@ fn submit_signal_handler(client: &Client, waiter: impl Future + Send + 'static) 
     });
 }
 
-pub(crate) struct DiscordClient {
-    services: Vec<Box<dyn BotService>>,
+pub(crate) struct DiscordClient<L: ServiceList<DiscordRuntime>> {
+    services: L,
+}
+impl DiscordClient<ListNil> {
+    pub fn new() -> Self {
+        Self { services: ListNil }
+    }
 }
 
-impl DiscordClient {
-    pub fn new() -> Self {
-        Self { services: vec![] }
-    }
-
-    pub fn add_service<S>(&mut self, service: S) -> &mut Self
+impl<L: ServiceList<DiscordRuntime> + Send + Sync + 'static> DiscordClient<L> {
+    pub fn add_service<S>(self, service: S) -> DiscordClient<ListCons<DiscordRuntime, S, L>>
     where
-        S: BotService + Send + 'static,
+        S: BotService<DiscordRuntime> + Send + 'static,
     {
-        self.services.push(Box::new(service));
-        self
+        DiscordClient {
+            services: self.services.append(service),
+        }
     }
 
     pub async fn run(self, token: &str) -> Result<()> {
@@ -81,63 +87,121 @@ impl DiscordClient {
     }
 }
 
-// TODO: should be configurable
-
-struct EvHandlerInner {
-    services: Vec<Box<dyn BotService>>,
+struct EvHandlerInner<L: ServiceList<DiscordRuntime>> {
+    services: L,
     vc_joined_users: Mutex<HashSet<SerenityUserId>>,
-    nickname_cache: RwLock<NicknameCache>,
-    is_bot_cache: RwLock<IsBotCache>,
+    nickname_cache: Arc<RwLock<NicknameCache>>,
+    is_bot_cache: Arc<RwLock<IsBotCache>>,
 }
 
-struct EvHandler {
-    inner: Arc<EvHandlerInner>,
+struct EvHandler<L: ServiceList<DiscordRuntime>> {
+    inner: Arc<EvHandlerInner<L>>,
 }
 
-impl EvHandler {
-    fn new(services: Vec<Box<dyn BotService>>) -> Self {
+// because current Rust cannot do this:
+//   impl Fn(&impl BotService) -> impl Future;
+mod visitors {
+    use super::*;
+    pub trait ForEachService: Send + Sync {
+        const OP: &'static str;
+        fn accept(
+            &self,
+            s: &impl BotService<DiscordRuntime>,
+        ) -> impl Future<Output = Result<()>> + Send;
+    }
+
+    pub struct MessageVisitor<'a> {
+        pub msg: &'a DiscordMessage,
+        pub ctx: &'a DiscordContext,
+    }
+    impl<'a> ForEachService for MessageVisitor<'a> {
+        const OP: &'static str = "on_message";
+        async fn accept(&self, s: &impl BotService<DiscordRuntime>) -> Result<()> {
+            s.on_message(self.msg, self.ctx).await
+        }
+    }
+
+    pub struct VcDataAvailableVisitor<'a> {
+        pub ctx: &'a DiscordContext,
+        pub users: &'a [u64],
+    }
+    impl<'a> ForEachService for VcDataAvailableVisitor<'a> {
+        const OP: &'static str = "on_vc_data_avaialble";
+        async fn accept(&self, s: &impl BotService<DiscordRuntime>) -> Result<()> {
+            s.on_vc_data_available(self.ctx, self.users).await
+        }
+    }
+
+    pub struct VcJoinVisitor<'a> {
+        pub ctx: &'a DiscordContext,
+        pub uid: u64,
+    }
+    impl<'a> ForEachService for VcJoinVisitor<'a> {
+        const OP: &'static str = "on_vc_join";
+        async fn accept(&self, s: &impl BotService<DiscordRuntime>) -> Result<()> {
+            s.on_vc_join(self.ctx, self.uid).await
+        }
+    }
+
+    pub struct VcLeaveVisitor<'a> {
+        pub ctx: &'a DiscordContext,
+        pub uid: u64,
+    }
+    impl<'a> ForEachService for VcLeaveVisitor<'a> {
+        const OP: &'static str = "on_vc_leave";
+        async fn accept(&self, s: &impl BotService<DiscordRuntime>) -> Result<()> {
+            s.on_vc_leave(self.ctx, self.uid).await
+        }
+    }
+}
+
+impl<L: ServiceList<DiscordRuntime> + 'static> EvHandler<L> {
+    fn new(services: L) -> Self {
         Self {
             inner: Arc::new(EvHandlerInner {
                 services,
                 vc_joined_users: Mutex::new(HashSet::new()),
-                nickname_cache: RwLock::new(NicknameCache(HashMap::new())),
-                is_bot_cache: RwLock::new(IsBotCache(HashMap::new())),
+                nickname_cache: Arc::new(RwLock::new(NicknameCache(HashMap::new()))),
+                is_bot_cache: Arc::new(RwLock::new(IsBotCache(HashMap::new()))),
             }),
         }
     }
 
-    async fn do_for_each_service<'a, F, Fu>(
+    async fn do_for_each_service<'a>(
         ctx: &'a SerenityContext,
-        inner: &'a EvHandlerInner,
-        op: &'static str,
-        f: F,
-    ) where
-        Fu: Future<Output = Result<()>> + Send + 'a,
-        F: Fn(&'a dyn BotService) -> Fu,
-    {
-        for service in &inner.services {
-            let result = f(service.as_ref()).await;
+        inner: &'a EvHandlerInner<L>,
+        f: impl visitors::ForEachService,
+    ) {
+        inner.services.visit(&Visitor { ctx, f }).await;
+        struct Visitor<'a, F: visitors::ForEachService> {
+            ctx: &'a SerenityContext,
+            f: F,
+        }
+        impl<'a, F: visitors::ForEachService> ServiceVisitor for Visitor<'a, F> {
+            type Runtime = DiscordRuntime;
+            async fn visit(&self, service: &impl BotService<Self::Runtime>) {
+                let result = self.f.accept(service).await;
 
-            if let Err(e) = result {
-                tracing::error!(
-                    "Service({})::{} returned error: {:?}",
-                    service.name(),
-                    op,
-                    e
-                );
+                if let Err(e) = result {
+                    tracing::error!(
+                        "Service({})::{} returned error: {e:?}",
+                        F::OP,
+                        service.name()
+                    );
 
-                SerenityChannelId::new(APPROVERS_DEFAULT_CHANNEL_ID)
-                    .say(
-                        &ctx,
-                        &format!("Unexpected error reported from \"{}\". Read log <@!391857452360007680>", service.name()),
-                    )
-                    .await
-                    .ok();
+                    SerenityChannelId::new(APPROVERS_DEFAULT_CHANNEL_ID)
+                        .say(
+                            &self.ctx,
+                            &format!("Unexpected error reported from \"{}\". Read log <@!391857452360007680>", service.name()),
+                        )
+                        .await
+                        .ok();
+                }
             }
         }
     }
 
-    async fn initial_validate_vc_cache(inner: Arc<EvHandlerInner>, ctx: SerenityContext) {
+    async fn initial_validate_vc_cache(inner: Arc<EvHandlerInner<L>>, ctx: SerenityContext) {
         let mut interval = interval(Duration::from_secs(1));
 
         loop {
@@ -171,9 +235,14 @@ impl EvHandler {
                 &inner.is_bot_cache,
             );
 
-            Self::do_for_each_service(&ctx, &inner, "on_vc_data_available", |s| {
-                s.on_vc_data_available(&converted_ctx, &joined_users)
-            })
+            Self::do_for_each_service(
+                &ctx,
+                &inner,
+                visitors::VcDataAvailableVisitor {
+                    ctx: &converted_ctx,
+                    users: &joined_users,
+                },
+            )
             .await;
 
             tracing::info!("vc status checking on startup complete");
@@ -183,7 +252,7 @@ impl EvHandler {
         tokio::spawn(Self::validate_vc_cache_loop(inner, ctx));
     }
 
-    async fn validate_vc_cache_loop(inner: Arc<EvHandlerInner>, ctx: SerenityContext) {
+    async fn validate_vc_cache_loop(inner: Arc<EvHandlerInner<L>>, ctx: SerenityContext) {
         let mut interval = interval(Duration::from_secs(30));
 
         loop {
@@ -224,9 +293,14 @@ impl EvHandler {
                 self_state.insert(uid);
                 tracing::info!("user({}) has actually joined to vc", uid.get());
 
-                Self::do_for_each_service(&ctx, &inner, "on_vc_join", |s| {
-                    s.on_vc_join(&converted_ctx, uid.get())
-                })
+                Self::do_for_each_service(
+                    &ctx,
+                    &inner,
+                    visitors::VcJoinVisitor {
+                        ctx: &converted_ctx,
+                        uid: uid.get(),
+                    },
+                )
                 .await;
             }
 
@@ -235,9 +309,14 @@ impl EvHandler {
 
                 self_state.remove(&uid);
 
-                Self::do_for_each_service(&ctx, &inner, "on_vc_leave", |s| {
-                    s.on_vc_leave(&converted_ctx, uid.get())
-                })
+                Self::do_for_each_service(
+                    &ctx,
+                    &inner,
+                    visitors::VcLeaveVisitor {
+                        ctx: &converted_ctx,
+                        uid: uid.get(),
+                    },
+                )
                 .await;
             }
         }
@@ -245,7 +324,7 @@ impl EvHandler {
 }
 
 #[async_trait]
-impl EventHandler for EvHandler {
+impl<L: ServiceList<DiscordRuntime> + Send + Sync + 'static> EventHandler for EvHandler<L> {
     async fn ready(&self, ctx: SerenityContext, ready: Ready) {
         tracing::info!("DiscordBot({}) is connected!", ready.user.name);
 
@@ -286,9 +365,14 @@ impl EventHandler for EvHandler {
 
                 self_state.insert(user_id);
 
-                Self::do_for_each_service(&ctx, &self.inner, "on_vc_join", |s| {
-                    s.on_vc_join(&converted_ctx, user_id.get())
-                })
+                Self::do_for_each_service(
+                    &ctx,
+                    &self.inner,
+                    visitors::VcJoinVisitor {
+                        ctx: &converted_ctx,
+                        uid: user_id.get(),
+                    },
+                )
                 .await;
             }
 
@@ -298,9 +382,14 @@ impl EventHandler for EvHandler {
 
                 self_state.remove(&user_id);
 
-                Self::do_for_each_service(&ctx, &self.inner, "on_vc_leave", |s| {
-                    s.on_vc_leave(&converted_ctx, user_id.get())
-                })
+                Self::do_for_each_service(
+                    &ctx,
+                    &self.inner,
+                    visitors::VcLeaveVisitor {
+                        ctx: &converted_ctx,
+                        uid: user_id.get(),
+                    },
+                )
                 .await;
             }
 
@@ -319,7 +408,8 @@ impl EventHandler for EvHandler {
 
         let converted_attachments = message
             .attachments
-            .iter()
+            .clone()
+            .into_iter()
             .map(DiscordAttachment)
             .collect::<Vec<_>>();
 
@@ -330,17 +420,6 @@ impl EventHandler for EvHandler {
             .0
             .insert(message.author.id, message.author.name.clone());
 
-        let converted_message = DiscordMessage {
-            ctx: &ctx,
-            message: &message,
-            attachments: converted_attachments.iter().map(|x| x as _).collect(),
-            author: DiscordAuthor {
-                id: message.author.id.get(),
-                name: &message.author.name,
-                ctx: &ctx,
-            },
-        };
-
         let converted_context = DiscordContext::from_serenity(
             &ctx,
             message.channel_id,
@@ -348,26 +427,50 @@ impl EventHandler for EvHandler {
             &self.inner.is_bot_cache,
         );
 
-        Self::do_for_each_service(&ctx, &self.inner, "on_message", |s| {
-            s.on_message(&converted_message, &converted_context)
-        })
+        let converted_message = DiscordMessage {
+            ctx: ctx.clone(),
+            attachments: converted_attachments,
+            author: DiscordAuthor {
+                id: message.author.id.get(),
+                name: message.author.name.clone(),
+                ctx: ctx.clone(),
+            },
+            message,
+        };
+
+        Self::do_for_each_service(
+            &ctx,
+            &self.inner,
+            visitors::MessageVisitor {
+                msg: &converted_message,
+                ctx: &converted_context,
+            },
+        )
         .await;
     }
+}
+
+pub struct DiscordRuntime;
+impl Runtime for DiscordRuntime {
+    type Message = DiscordMessage;
+    type Context = DiscordContext;
 }
 
 struct NicknameCache(HashMap<SerenityUserId, String>);
 
 struct IsBotCache(HashMap<SerenityUserId, bool>);
 
-struct DiscordMessage<'a> {
-    ctx: &'a SerenityContext,
-    message: &'a SerenityMessage,
-    attachments: Vec<&'a dyn Attachment>,
-    author: DiscordAuthor<'a>,
+pub struct DiscordMessage {
+    ctx: SerenityContext,
+    message: SerenityMessage,
+    attachments: Vec<DiscordAttachment>,
+    author: DiscordAuthor,
 }
 
-#[async_trait]
-impl Message for DiscordMessage<'_> {
+impl Message for DiscordMessage {
+    type Attachment = DiscordAttachment;
+    type User = DiscordAuthor;
+
     async fn reply(&self, text: &str) -> Result<()> {
         self.message
             .reply_ping(&self.ctx.http, text)
@@ -380,30 +483,29 @@ impl Message for DiscordMessage<'_> {
         &self.message.content
     }
 
-    fn attachments(&self) -> &[&dyn Attachment] {
+    fn attachments(&self) -> &[DiscordAttachment] {
         &self.attachments
     }
 
-    fn author(&self) -> &dyn User {
+    fn author(&self) -> &DiscordAuthor {
         &self.author
     }
 }
 
-struct DiscordAuthor<'a> {
+pub struct DiscordAuthor {
     id: u64,
     #[allow(unused)]
-    name: &'a str,
-    ctx: &'a SerenityContext,
+    name: String,
+    ctx: SerenityContext,
 }
 
-#[async_trait]
-impl<'a> User for DiscordAuthor<'a> {
+impl User for DiscordAuthor {
     fn id(&self) -> u64 {
         self.id
     }
 
     fn name(&self) -> &str {
-        self.name
+        &self.name
     }
 
     async fn dm(&self, msg: SendMessage<'_>) -> Result<()> {
@@ -416,10 +518,10 @@ impl<'a> User for DiscordAuthor<'a> {
         let msg = CreateMessage::new().content(msg.content);
 
         SerenityUserId::new(self.id)
-            .create_dm_channel(self.ctx)
+            .create_dm_channel(&self.ctx)
             .await
             .context("failed to create DM channel")?
-            .send_files(self.ctx, files, msg)
+            .send_files(&self.ctx, files, msg)
             .await
             .context("failed to send DM")?;
 
@@ -427,10 +529,9 @@ impl<'a> User for DiscordAuthor<'a> {
     }
 }
 
-struct DiscordAttachment<'a>(&'a SerenityAttachment);
+pub struct DiscordAttachment(SerenityAttachment);
 
-#[async_trait]
-impl Attachment for DiscordAttachment<'_> {
+impl Attachment for DiscordAttachment {
     fn name(&self) -> &str {
         &self.0.filename
     }
@@ -447,31 +548,30 @@ impl Attachment for DiscordAttachment<'_> {
     }
 }
 
-struct DiscordContext<'a> {
-    origin: &'a SerenityContext,
+pub struct DiscordContext {
+    origin: SerenityContext,
     channel_id: SerenityChannelId,
-    nickname_cache: &'a RwLock<NicknameCache>,
-    is_bot_cache: &'a RwLock<IsBotCache>,
+    nickname_cache: Arc<RwLock<NicknameCache>>,
+    is_bot_cache: Arc<RwLock<IsBotCache>>,
 }
 
-impl<'a> DiscordContext<'a> {
+impl DiscordContext {
     fn from_serenity(
-        origin: &'a SerenityContext,
+        origin: &SerenityContext,
         channel_id: impl Into<SerenityChannelId>,
-        nickname_cache: &'a RwLock<NicknameCache>,
-        is_bot_cache: &'a RwLock<IsBotCache>,
+        nickname_cache: &Arc<RwLock<NicknameCache>>,
+        is_bot_cache: &Arc<RwLock<IsBotCache>>,
     ) -> Self {
         Self {
-            origin,
+            origin: origin.clone(),
             channel_id: channel_id.into(),
-            nickname_cache,
-            is_bot_cache,
+            nickname_cache: Arc::clone(nickname_cache),
+            is_bot_cache: Arc::clone(is_bot_cache),
         }
     }
 }
 
-#[async_trait]
-impl Context for DiscordContext<'_> {
+impl Context for DiscordContext {
     async fn send_message(&self, msg: SendMessage<'_>) -> Result<()> {
         let files = msg
             .attachments
@@ -497,7 +597,7 @@ impl Context for DiscordContext<'_> {
         }
 
         let user = user_id
-            .to_user(self.origin)
+            .to_user(&self.origin)
             .await
             .context("failed to get username from discord")?;
 
@@ -509,7 +609,7 @@ impl Context for DiscordContext<'_> {
 
         self.is_bot_cache.write().await.0.insert(user_id, user.bot);
 
-        return Ok(user.name);
+        Ok(user.name)
     }
 
     async fn is_bot(&self, user_id: u64) -> Result<bool> {
@@ -520,7 +620,7 @@ impl Context for DiscordContext<'_> {
         }
 
         let user = user_id
-            .to_user(self.origin)
+            .to_user(&self.origin)
             .await
             .context("failed to get username from discord")?;
 
@@ -532,6 +632,6 @@ impl Context for DiscordContext<'_> {
 
         self.is_bot_cache.write().await.0.insert(user_id, user.bot);
 
-        return Ok(user.bot);
+        Ok(user.bot)
     }
 }

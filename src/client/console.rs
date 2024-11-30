@@ -1,7 +1,9 @@
 use {
-    crate::bot::{Attachment, BotService, Context, Message, SendMessage, User},
+    crate::{
+        bot::{Attachment, BotService, Context, Message, Runtime, SendMessage, User},
+        client::{ListCons, ListNil, ServiceList, ServiceVisitor},
+    },
     anyhow::Result,
-    async_trait::async_trait,
     std::{
         io::{stdin, stdout, Write},
         path::Path,
@@ -9,21 +11,24 @@ use {
     },
 };
 
-pub(crate) struct ConsoleClient<'a> {
-    services: Vec<Box<dyn BotService + 'a>>,
+pub(crate) struct ConsoleClient<L: ServiceList<ConsoleRuntime>> {
+    services: L,
 }
 
-impl<'a> ConsoleClient<'a> {
+impl ConsoleClient<ListNil> {
     pub fn new() -> Self {
-        Self { services: vec![] }
+        Self { services: ListNil }
     }
+}
 
-    pub fn add_service<S>(&mut self, service: S) -> &mut Self
+impl<L: ServiceList<ConsoleRuntime>> ConsoleClient<L> {
+    pub fn add_service<S>(self, service: S) -> ConsoleClient<ListCons<ConsoleRuntime, S, L>>
     where
-        S: BotService + Send + 'a,
+        S: BotService<ConsoleRuntime> + Send,
     {
-        self.services.push(Box::new(service));
-        self
+        ConsoleClient {
+            services: self.services.append(service),
+        }
     }
 
     pub async fn run(self) -> Result<()> {
@@ -68,54 +73,73 @@ impl<'a> ConsoleClient<'a> {
                         continue;
                     }
 
-                    (
-                        content,
-                        attachments.iter().map(|x| x as _).collect::<Vec<_>>(),
-                    )
+                    (content, attachments)
                 } else {
                     (input, vec![])
                 }
             };
 
-            for service in self.services.iter() {
-                let begin = Instant::now();
+            struct Visitor {
+                content: String,
+                attachments: Vec<ConsoleAttachment>,
+            }
+            impl ServiceVisitor for Visitor {
+                type Runtime = ConsoleRuntime;
+                async fn visit(&self, service: &impl BotService<ConsoleRuntime>) {
+                    let begin = Instant::now();
 
-                let ctx = ConsoleContext {
-                    service_name: service.name(),
-                    begin,
-                };
-
-                let message = ConsoleMessage {
-                    service_name: service.name(),
-                    begin,
-                    content: content.clone(),
-                    attachments: attachments.clone(),
-                    user: ConsoleUser {
+                    let ctx = ConsoleContext {
                         service_name: service.name(),
                         begin,
-                    },
-                };
+                    };
 
-                let result = service.on_message(&message, &ctx).await;
+                    let message = ConsoleMessage {
+                        service_name: service.name().to_owned(),
+                        begin,
+                        content: self.content.clone(),
+                        attachments: self.attachments.clone(),
+                        user: ConsoleUser {
+                            service_name: service.name().to_owned(),
+                            begin,
+                        },
+                    };
 
-                if let Err(e) = result {
-                    println!("(ConsoleClient): error while calling service: {e:?}",);
+                    let result = service.on_message(&message, &ctx).await;
+
+                    if let Err(e) = result {
+                        println!("(ConsoleClient): error while calling service: {e:?}",);
+                    }
                 }
             }
+
+            self.services
+                .visit(&Visitor {
+                    content,
+                    attachments,
+                })
+                .await;
         }
     }
 }
 
-struct ConsoleMessage<'a> {
-    service_name: &'a str,
-    begin: Instant,
-    content: String,
-    attachments: Vec<&'a dyn Attachment>,
-    user: ConsoleUser<'a>,
+pub struct ConsoleRuntime;
+impl Runtime for ConsoleRuntime {
+    type Message = ConsoleMessage;
+    type Context = ConsoleContext;
 }
 
-#[async_trait]
-impl Message for ConsoleMessage<'_> {
+pub struct ConsoleMessage {
+    service_name: String,
+    begin: Instant,
+    content: String,
+    attachments: Vec<ConsoleAttachment>,
+    user: ConsoleUser,
+}
+
+impl Message for ConsoleMessage {
+    type Attachment = ConsoleAttachment;
+    type User = ConsoleUser;
+
     async fn reply(&self, content: &str) -> Result<()> {
         println!(
             "({}, reply, {}ms): {}",
@@ -130,22 +154,21 @@ impl Message for ConsoleMessage<'_> {
         &self.content
     }
 
-    fn attachments(&self) -> &[&dyn Attachment] {
+    fn attachments(&self) -> &[ConsoleAttachment] {
         &self.attachments
     }
 
-    fn author(&self) -> &dyn crate::bot::User {
+    fn author(&self) -> &ConsoleUser {
         &self.user
     }
 }
 
-struct ConsoleUser<'a> {
-    service_name: &'a str,
+pub struct ConsoleUser {
+    service_name: String,
     begin: Instant,
 }
 
-#[async_trait]
-impl<'a> User for ConsoleUser<'a> {
+impl User for ConsoleUser {
     fn id(&self) -> u64 {
         0
     }
@@ -166,22 +189,25 @@ impl<'a> User for ConsoleUser<'a> {
     }
 }
 
-struct ConsoleAttachment<'a> {
-    path: &'a str,
+#[derive(Clone)]
+pub struct ConsoleAttachment {
+    path: String,
     content: Vec<u8>,
 }
 
-impl<'a> ConsoleAttachment<'a> {
-    fn load(path: &'a str) -> Result<Self, std::io::Error> {
+impl ConsoleAttachment {
+    fn load(path: &str) -> Result<Self, std::io::Error> {
         let content = std::fs::read(path)?;
-        Ok(ConsoleAttachment { content, path })
+        Ok(ConsoleAttachment {
+            content,
+            path: path.to_owned(),
+        })
     }
 }
 
-#[async_trait]
-impl<'a> Attachment for ConsoleAttachment<'a> {
+impl Attachment for ConsoleAttachment {
     fn name(&self) -> &str {
-        Path::new(self.path).file_name().unwrap().to_str().unwrap()
+        Path::new(&self.path).file_name().unwrap().to_str().unwrap()
     }
 
     fn size(&self) -> usize {
@@ -193,12 +219,11 @@ impl<'a> Attachment for ConsoleAttachment<'a> {
     }
 }
 
-struct ConsoleContext {
+pub struct ConsoleContext {
     service_name: &'static str,
     begin: Instant,
 }
 
-#[async_trait]
 impl Context for ConsoleContext {
     async fn send_message(&self, msg: SendMessage<'_>) -> Result<()> {
         println!(

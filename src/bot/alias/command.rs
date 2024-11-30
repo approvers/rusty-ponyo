@@ -53,10 +53,10 @@ impl<D: MessageAliasDatabase> MessageAliasBot<D> {
 
     pub(super) async fn make(
         &self,
-        ctx: &dyn Context,
+        ctx: &impl Context,
         key: &str,
         msg: Option<&str>,
-        attachments: &[&dyn Attachment],
+        attachments: &[impl Attachment],
         force: bool,
     ) -> Result<()> {
         let key = key.trim();
