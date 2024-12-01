@@ -20,7 +20,7 @@ pub mod vc_diff;
 // repro: https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=97640973cf3459848463dbd13ba8f951
 // issue: https://github.com/rust-lang/rust/issues/100013
 
-pub(crate) trait Message: Send + Sync {
+pub trait Message: Send + Sync {
     type Attachment: Attachment;
     type User: User;
 
@@ -30,13 +30,13 @@ pub(crate) trait Message: Send + Sync {
     fn attachments(&self) -> &[Self::Attachment];
 }
 
-pub(crate) trait Attachment: Send + Sync {
+pub trait Attachment: Send + Sync {
     fn name(&self) -> &str;
     fn size(&self) -> usize;
     fn download(&self) -> impl Future<Output = Result<Vec<u8>>> + Send;
 }
 
-pub(crate) trait User: Send + Sync {
+pub trait User: Send + Sync {
     fn id(&self) -> u64;
     fn name(&self) -> &str;
     fn dm(&self, msg: SendMessage<'_>) -> impl Future<Output = Result<()>> + Send;
@@ -52,18 +52,18 @@ pub(crate) trait User: Send + Sync {
     }
 }
 
-pub(crate) struct SendMessage<'a> {
-    pub(crate) content: &'a str,
-    pub(crate) attachments: &'a [SendAttachment<'a>],
+pub struct SendMessage<'a> {
+    pub content: &'a str,
+    pub attachments: &'a [SendAttachment<'a>],
 }
 
-pub(crate) struct SendAttachment<'a> {
-    pub(crate) name: &'a str,
+pub struct SendAttachment<'a> {
+    pub name: &'a str,
     #[allow(dead_code)]
-    pub(crate) data: &'a [u8],
+    pub data: &'a [u8],
 }
 
-pub(crate) trait Context: Send + Sync {
+pub trait Context: Send + Sync {
     fn send_message(&self, msg: SendMessage<'_>) -> impl Future<Output = Result<()>> + Send;
     fn get_user_name(&self, user_id: u64) -> impl Future<Output = Result<String>> + Send;
     fn is_bot(&self, user_id: u64) -> impl Future<Output = Result<bool>> + Send;
@@ -84,7 +84,7 @@ pub trait Runtime {
     type Context: Context;
 }
 
-pub(crate) trait BotService<R: Runtime>: Send + Sync {
+pub trait BotService<R: Runtime>: Send + Sync {
     fn name(&self) -> &'static str;
 
     fn on_message(

@@ -11,10 +11,10 @@ use {
 // FIXME: Japanese fonts rendering are broken.
 // FIXME: No axis description.
 
-pub(crate) struct Matplotlib {}
+pub struct Matplotlib {}
 
 impl Matplotlib {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {}
     }
 }

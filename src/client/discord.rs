@@ -38,7 +38,7 @@ fn submit_signal_handler(client: &Client, waiter: impl Future + Send + 'static) 
     });
 }
 
-pub(crate) struct DiscordClient<L: ServiceList<DiscordRuntime>> {
+pub struct DiscordClient<L: ServiceList<DiscordRuntime>> {
     services: L,
 }
 impl DiscordClient<ListNil> {

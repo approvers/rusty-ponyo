@@ -7,10 +7,10 @@ use {
 
 crate::assert_one_feature!("plot_plotters_static", "plot_plotters_dynamic");
 
-pub(crate) struct Plotters {}
+pub struct Plotters {}
 
 impl Plotters {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         #[cfg(feature = "plot_plotters_static")]
         {
             use parking_lot::Once;

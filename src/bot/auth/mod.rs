@@ -49,7 +49,7 @@ enum SetCommand {
     },
 }
 
-pub(crate) trait GenkaiAuthDatabase: Send + Sync {
+pub trait GenkaiAuthDatabase: Send + Sync {
     fn register_pgp_key(&self, user_id: u64, cert: &str)
         -> impl Future<Output = Result<()>> + Send;
     fn get_pgp_key(&self, user_id: u64) -> impl Future<Output = Result<Option<String>>> + Send;
@@ -63,7 +63,7 @@ pub(crate) trait GenkaiAuthDatabase: Send + Sync {
     fn get_token(&self, user_id: u64) -> impl Future<Output = Result<Option<String>>> + Send;
 }
 
-pub(crate) struct GenkaiAuthBot<D> {
+pub struct GenkaiAuthBot<D> {
     db: D,
     pgp_pubkey_source_domain_whitelist: Vec<String>,
 }
@@ -95,7 +95,7 @@ impl<R: Runtime, D: GenkaiAuthDatabase> BotService<R> for GenkaiAuthBot<D> {
 }
 
 impl<D: GenkaiAuthDatabase> GenkaiAuthBot<D> {
-    pub(crate) fn new(db: D, pubkey_whitelist: Vec<String>) -> Self {
+    pub fn new(db: D, pubkey_whitelist: Vec<String>) -> Self {
         Self {
             db,
             pgp_pubkey_source_domain_whitelist: pubkey_whitelist,

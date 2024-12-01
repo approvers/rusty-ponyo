@@ -1,6 +1,6 @@
-pub(crate) mod formula;
-pub(crate) mod model;
-pub(crate) mod plot;
+pub mod formula;
+pub mod model;
+pub mod plot;
 
 use {
     crate::bot::{
@@ -119,7 +119,7 @@ fn parse_duration(s: &str) -> Result<Duration, DurationError> {
     Ok(d)
 }
 
-pub(crate) trait GenkaiPointDatabase: Send + Sync {
+pub trait GenkaiPointDatabase: Send + Sync {
     /// Creates a new unclosed session if not exists.
     /// If the user's last session was closed before within 5minutes from now, clear its "left_at" field.
     /// If an unclosed session exists, leaves it untouched.
@@ -169,18 +169,18 @@ pub(crate) trait GenkaiPointDatabase: Send + Sync {
     }
 }
 
-pub(crate) trait Plotter: Send + Sync + 'static {
+pub trait Plotter: Send + Sync + 'static {
     fn plot(&self, data: Vec<(String, Vec<f64>)>) -> impl Future<Output = Result<Vec<u8>>> + Send;
 }
 
 #[derive(Debug)]
-pub(crate) enum CreateNewSessionResult {
+pub enum CreateNewSessionResult {
     NewSessionCreated,
     UnclosedSessionExists,
     SessionResumed,
 }
 
-pub(crate) struct GenkaiPointBot<D, P> {
+pub struct GenkaiPointBot<D, P> {
     db: D,
     resume_msg_timeout: Mutex<DateTime<Utc>>,
     plotter: P,
@@ -190,7 +190,7 @@ pub(crate) struct GenkaiPointBot<D, P> {
 static RESUME_MSG_TIMEOUT: Lazy<Duration> = Lazy::new(|| Duration::seconds(10));
 
 impl<D: GenkaiPointDatabase, P: Plotter> GenkaiPointBot<D, P> {
-    pub(crate) fn new(db: D, plotter: P) -> Self {
+    pub fn new(db: D, plotter: P) -> Self {
         Self {
             db,
             resume_msg_timeout: Mutex::new(Utc::now()),

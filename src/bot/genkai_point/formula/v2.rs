@@ -7,7 +7,7 @@ use {
     chrono_tz::Asia::Tokyo,
 };
 
-pub(crate) struct FormulaV2;
+pub struct FormulaV2;
 
 impl GenkaiPointFormula for FormulaV2 {
     fn name(&self) -> &'static str {

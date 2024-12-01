@@ -30,7 +30,7 @@ enum Command {
     Status,
 }
 
-pub(crate) struct VcDiffBot {
+pub struct VcDiffBot {
     enabled: Mutex<bool>,
     timeout: Mutex<DateTime<Utc>>,
 }

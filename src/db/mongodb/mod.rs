@@ -27,12 +27,12 @@ use {
 };
 
 #[derive(Clone)]
-pub(crate) struct MongoDb {
+pub struct MongoDb {
     inner: Database,
 }
 
 impl MongoDb {
-    pub(crate) async fn new(uri: &str) -> Result<Self> {
+    pub async fn new(uri: &str) -> Result<Self> {
         let opt = ClientOptions::parse(uri)
             .await
             .context("failed to parse mongodb uri")?;

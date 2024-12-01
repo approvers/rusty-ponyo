@@ -7,16 +7,16 @@ use {
 };
 
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) struct UserStat {
-    pub(crate) user_id: u64,
-    pub(crate) genkai_point: u64,
-    pub(crate) total_vc_duration: Duration,
-    pub(crate) efficiency: NotNan<f64>,
-    pub(crate) last_activity_at: DateTime<Utc>,
+pub struct UserStat {
+    pub user_id: u64,
+    pub genkai_point: u64,
+    pub total_vc_duration: Duration,
+    pub efficiency: NotNan<f64>,
+    pub last_activity_at: DateTime<Utc>,
 }
 
 impl UserStat {
-    pub(crate) fn from_sessions(
+    pub fn from_sessions(
         sessions: &[Session],
         formula: &impl GenkaiPointFormula,
     ) -> Result<Option<UserStat>> {
@@ -52,18 +52,18 @@ impl UserStat {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct Session {
-    pub(crate) user_id: u64,
-    pub(crate) joined_at: DateTime<Utc>,
-    pub(crate) left_at: Option<DateTime<Utc>>,
+pub struct Session {
+    pub user_id: u64,
+    pub joined_at: DateTime<Utc>,
+    pub left_at: Option<DateTime<Utc>>,
 }
 
 impl Session {
-    pub(crate) fn duration(&self) -> Duration {
+    pub fn duration(&self) -> Duration {
         self.left_at.unwrap_or_else(Utc::now) - self.joined_at
     }
 
-    pub(crate) fn left_at(&self) -> DateTime<Utc> {
+    pub fn left_at(&self) -> DateTime<Utc> {
         self.left_at.unwrap_or_else(Utc::now)
     }
 }

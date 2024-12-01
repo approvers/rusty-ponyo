@@ -1,5 +1,5 @@
 mod command;
-pub(crate) mod model;
+pub mod model;
 
 use {
     crate::bot::{
@@ -50,7 +50,7 @@ enum Command {
     },
 }
 
-pub(crate) trait MessageAliasDatabase: Send + Sync {
+pub trait MessageAliasDatabase: Send + Sync {
     fn save(&self, alias: MessageAlias) -> impl Future<Output = Result<()>> + Send;
     fn get(&self, key: &str) -> impl Future<Output = Result<Option<MessageAlias>>> + Send;
     fn get_and_increment_usage_count(
@@ -63,7 +63,7 @@ pub(crate) trait MessageAliasDatabase: Send + Sync {
         -> impl Future<Output = Result<Vec<MessageAlias>>> + Send;
 }
 
-pub(crate) struct MessageAliasBot<D: MessageAliasDatabase> {
+pub struct MessageAliasBot<D: MessageAliasDatabase> {
     db: D,
 }
 
@@ -92,7 +92,7 @@ impl<R: Runtime, D: MessageAliasDatabase> BotService<R> for MessageAliasBot<D> {
 }
 
 impl<D: MessageAliasDatabase> MessageAliasBot<D> {
-    pub(crate) fn new(db: D) -> Self {
+    pub fn new(db: D) -> Self {
         Self { db }
     }
 

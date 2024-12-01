@@ -4,16 +4,16 @@ use {
 };
 
 #[derive(Clone, Serialize)]
-pub(crate) struct MessageAlias {
-    pub(crate) key: String,
-    pub(crate) message: String,
-    pub(crate) attachments: Vec<MessageAliasAttachment>,
-    pub(crate) usage_count: u32,
-    pub(crate) created_at: DateTime<Utc>,
+pub struct MessageAlias {
+    pub key: String,
+    pub message: String,
+    pub attachments: Vec<MessageAliasAttachment>,
+    pub usage_count: u32,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Clone, Serialize)]
-pub(crate) struct MessageAliasAttachment {
-    pub(crate) name: String,
-    pub(crate) data: Vec<u8>,
+pub struct MessageAliasAttachment {
+    pub name: String,
+    pub data: Vec<u8>,
 }

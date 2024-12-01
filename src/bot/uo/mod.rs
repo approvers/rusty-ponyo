@@ -22,7 +22,7 @@ enum Command {
     Reroll,
 }
 
-pub(crate) struct UoBot {
+pub struct UoBot {
     prob_percent: Mutex<u8>,
 }
 

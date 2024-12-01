@@ -11,7 +11,7 @@ use {
     },
 };
 
-pub(crate) struct ConsoleClient<L: ServiceList<ConsoleRuntime>> {
+pub struct ConsoleClient<L: ServiceList<ConsoleRuntime>> {
     services: L,
 }
 

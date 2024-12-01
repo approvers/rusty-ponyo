@@ -26,7 +26,7 @@ struct MemoryDBInner {
     meigens: Vec<Meigen>,
 }
 
-pub(crate) struct MemoryDB(Arc<Mutex<MemoryDBInner>>);
+pub struct MemoryDB(Arc<Mutex<MemoryDBInner>>);
 
 impl Clone for MemoryDB {
     fn clone(&self) -> Self {
@@ -35,7 +35,7 @@ impl Clone for MemoryDB {
 }
 
 impl MemoryDB {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self(Arc::new(Mutex::new(MemoryDBInner {
             aliases: vec![],
             sessions: vec![],
@@ -50,7 +50,7 @@ impl MemoryDB {
 }
 
 impl MemoryDBInner {
-    pub(crate) async fn dump(&self) -> Result<()> {
+    pub async fn dump(&self) -> Result<()> {
         let json = serde_json::to_string_pretty(self).context("failed to serialize")?;
 
         tokio::fs::write("mem_db_dump.json", json)

@@ -10,13 +10,13 @@ use {
 };
 
 #[cfg(feature = "plot_matplotlib")]
-pub(crate) mod matplotlib;
+pub mod matplotlib;
 
 #[cfg(feature = "plot_plotters")]
-pub(crate) mod plotters;
+pub mod plotters;
 
 #[cfg(feature = "plot_charming")]
-pub(crate) mod charming;
+pub mod charming;
 
 pub(super) async fn plot<P: Plotter + Send>(
     db: &impl GenkaiPointDatabase,
