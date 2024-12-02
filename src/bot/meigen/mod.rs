@@ -10,26 +10,18 @@ use {
 
 pub mod model;
 
-#[derive(ValueEnum, Clone, Debug, PartialEq, Eq)]
+#[derive(ValueEnum, Clone, Debug, PartialEq, Eq, Default)]
 pub enum SortKey {
+    #[default]
+    Id,
     Love,
     Length,
-    Randomized,
-}
-impl SortKey {
-    pub fn default_sort_dir(&self) -> SortDirection {
-        match self {
-            SortKey::Love => SortDirection::Desc,
-            SortKey::Length => SortDirection::Desc,
-            // sorts by ID after picking the random genkai
-            SortKey::Randomized => SortDirection::Asc,
-        }
-    }
 }
 
-#[derive(ValueEnum, Clone, Debug, PartialEq, Eq)]
+#[derive(ValueEnum, Clone, Debug, PartialEq, Eq, Default)]
 pub enum SortDirection {
     #[clap(alias = "a")]
+    #[default]
     Asc,
     #[clap(alias = "d")]
     Desc,
@@ -53,9 +45,9 @@ pub struct FindOptions<'a> {
     pub content: Option<&'a str>,
     pub offset: u32,
     pub limit: u8,
-    pub sort: Option<SortKey>,
-    pub dir: Option<SortDirection>,
-    pub reverse: bool,
+    pub sort: SortKey,
+    pub dir: SortDirection,
+    pub random: bool,
 }
 
 #[async_trait]
@@ -116,22 +108,11 @@ enum Command {
 
     /// 名言をリスト表示します
     #[clap(group(
-        ArgGroup::new("sort_conflict")
-            .args(&["sort"])
-            .requires("sort")
-            .conflicts_with("random")
-    ))] // --sort and --random conflicts
-    #[clap(group(
         ArgGroup::new("dir_conflict")
             .args(&["dir"])
             .requires("dir")
             .conflicts_with("reverse")
     ))] // --dir and --reverse conflicts
-    #[clap(group(
-        ArgGroup::new("dir_group")
-            .args(&["dir"])
-            .requires_all(["sort", "dir"])
-    ))] // --dir requires --sort
     List {
         /// 表示する名言のオフセット
         #[clap(long)]
@@ -158,15 +139,14 @@ enum Command {
         content: Option<String>,
 
         /// 指定した項目でソートします。
-        /// "--random" とは一緒に使えません。
-        #[clap(value_enum, long)]
-        sort: Option<SortKey>,
+        #[clap(value_enum, long, default_value_t)]
+        sort: SortKey,
 
         /// ソートの順番を入れ替えます。
-        #[clap(value_enum, long)]
-        dir: Option<SortDirection>,
+        #[clap(value_enum, long, default_value_t)]
+        dir: SortDirection,
 
-        /// 順番を入れ替えます。
+        /// 降順にします。--dir desc のエイリアスです。
         #[clap(short, long, alias = "rev")]
         #[clap(default_value_t = false)]
         reverse: bool,
@@ -229,13 +209,9 @@ impl<D: MeigenDatabase> BotService for MeigenBot<D> {
                     content: content.as_deref(),
                     offset,
                     limit,
-                    sort: if random {
-                        Some(SortKey::Randomized)
-                    } else {
-                        sort
-                    },
+                    sort,
                     dir,
-                    reverse,
+                    random,
                 })
                 .await?
             }

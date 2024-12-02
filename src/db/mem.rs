@@ -7,7 +7,7 @@ use {
             meigen::{
                 self,
                 model::{Meigen, MeigenId},
-                MeigenDatabase, SortDirection,
+                MeigenDatabase, SortDirection, SortKey,
             },
             IsUpdated,
         },
@@ -16,7 +16,7 @@ use {
     anyhow::{anyhow, Context as _, Result},
     async_trait::async_trait,
     chrono::{DateTime, Duration, Utc},
-    rand::seq::SliceRandom,
+    rand::{seq::SliceRandom, thread_rng},
     serde::Serialize,
     std::{collections::HashMap, ops::DerefMut, sync::Arc},
     tokio::sync::Mutex,
@@ -341,28 +341,28 @@ impl MeigenDatabase for MemoryDB {
             })
             .collect::<Vec<_>>();
 
-        if let Some(sort_key) = options.sort {
-            let dir = options
-                .dir
-                .unwrap_or(sort_key.default_sort_dir())
-                .take_and_apply_if(options.reverse, |dir| dir.reversed());
+        if options.random {
+            meigens.shuffle(&mut thread_rng());
+            meigens.truncate(options.limit as usize);
+        }
 
-            use meigen::SortKey::*;
-            match sort_key {
-                Love => meigens.sort_by_key_with_dir(|meigen| meigen.loved_user_id.len(), dir),
-                Length => meigens.sort_by_key_with_dir(|meigen| meigen.content.len(), dir),
-                Randomized => {
-                    meigens.shuffle(&mut rand::thread_rng());
-                    if options.reverse {
-                        meigens.reverse()
-                    }
-                }
+        match options.sort {
+            SortKey::Id => meigens.sort_by_key_with_dir(|meigen| meigen.id, options.dir),
+            SortKey::Love => {
+                meigens.sort_by_key_with_dir(|meigen| meigen.loved_user_id.len(), options.dir)
+            }
+            SortKey::Length => {
+                meigens.sort_by_key_with_dir(|meigen| meigen.content.len(), options.dir)
             }
         }
 
         Ok(meigens
             .into_iter()
-            .skip(options.offset as usize)
+            .skip(if options.random {
+                0
+            } else {
+                options.offset as usize
+            })
             .take(options.limit as usize)
             .cloned()
             .collect())
