@@ -6,13 +6,13 @@ use {
         meigen::{
             self,
             model::{Meigen, MeigenId},
-            MeigenDatabase,
+            MeigenDatabase, SortDirection, SortKey,
         },
         IsUpdated,
     },
     anyhow::{anyhow, Context as _, Result},
     chrono::{DateTime, Duration, Utc},
-    rand::seq::SliceRandom,
+    rand::{seq::SliceRandom, thread_rng},
     serde::Serialize,
     std::{collections::HashMap, ops::DerefMut, sync::Arc},
     tokio::sync::Mutex,
@@ -332,12 +332,29 @@ impl MeigenDatabase for MemoryDB {
                     && options.content.map_or(true, |c| x.content.contains(c))
             })
             .collect::<Vec<_>>();
+
         if options.random {
-            meigens.shuffle(&mut rand::thread_rng());
+            meigens.shuffle(&mut thread_rng());
+            meigens.truncate(options.limit as usize);
         }
+
+        match options.sort {
+            SortKey::Id => meigens.sort_by_key_with_dir(|meigen| meigen.id, options.dir),
+            SortKey::Love => {
+                meigens.sort_by_key_with_dir(|meigen| meigen.loved_user_id.len(), options.dir)
+            }
+            SortKey::Length => {
+                meigens.sort_by_key_with_dir(|meigen| meigen.content.len(), options.dir)
+            }
+        }
+
         Ok(meigens
             .into_iter()
-            .skip(options.offset as usize)
+            .skip(if options.random {
+                0
+            } else {
+                options.offset as usize
+            })
             .take(options.limit as usize)
             .cloned()
             .collect())
@@ -376,5 +393,30 @@ impl MeigenDatabase for MemoryDB {
 
         meigen.loved_user_id.swap_remove(index);
         Ok(true)
+    }
+}
+
+pub trait SortByKeyWithDirTraitExt<I> {
+    fn sort_by_key_with_dir<FnK, FnKR>(&mut self, key: FnK, dir: SortDirection)
+    where
+        FnK: Fn(&I) -> FnKR,
+        FnKR: Ord;
+}
+
+impl<I> SortByKeyWithDirTraitExt<I> for Vec<I> {
+    fn sort_by_key_with_dir<FnK, FnKR>(&mut self, key: FnK, dir: SortDirection)
+    where
+        FnK: Fn(&I) -> FnKR,
+        FnKR: Ord,
+    {
+        self.sort_by(|left, right| {
+            let left_key = key(left);
+            let right_key = key(right);
+
+            match dir {
+                SortDirection::Asc => left_key.cmp(&right_key),
+                SortDirection::Desc => left_key.cmp(&right_key).reverse(),
+            }
+        })
     }
 }

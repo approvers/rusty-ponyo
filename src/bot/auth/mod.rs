@@ -233,7 +233,7 @@ fn parse_gpg_key(armored: &str) -> Result<Vec<Cert>> {
 // verify that certs are parsable, and return downloaded armor certs.
 async fn download_gpg_key(url: &str) -> std::result::Result<String, &'static str> {
     const TIMEOUT: Duration = Duration::from_secs(5);
-    const DL_SIZE_LIMIT: u64 = 1024 * 10; // 10KIB
+    const DL_SIZE_LIMIT: u64 = 1024 * 64; // 64KIB
 
     let client = reqwest::Client::builder()
         .connect_timeout(TIMEOUT)
