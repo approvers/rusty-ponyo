@@ -349,14 +349,8 @@ impl MeigenDatabase for MemoryDB {
 
             use meigen::SortKey::*;
             match sort_key {
-                Love => meigens.sort_by_key_with_dir(
-                    |meigen| meigen.loved_user_id.len(),
-                    dir
-                ),
-                Length => meigens.sort_by_key_with_dir(
-                    |meigen| meigen.content.len(),
-                    dir
-                ),
+                Love => meigens.sort_by_key_with_dir(|meigen| meigen.loved_user_id.len(), dir),
+                Length => meigens.sort_by_key_with_dir(|meigen| meigen.content.len(), dir),
                 Randomized => {
                     meigens.shuffle(&mut rand::thread_rng());
                     if options.reverse {
