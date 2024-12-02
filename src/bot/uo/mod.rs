@@ -1,6 +1,6 @@
-use crate::bot::{parse_command, ui, BotService, Context, Message, KAWAEMON_DISCORD_USER_ID};
+use crate::bot::{parse_command, ui, BotService, Context, Message, Runtime, User};
 use anyhow::{Context as _, Result};
-use async_trait::async_trait;
+use rusty_ponyo::KAWAEMON_DISCORD_USER_ID;
 use tokio::sync::Mutex;
 
 const NAME: &str = "rusty_ponyo::bot::uo";
@@ -22,7 +22,7 @@ enum Command {
     Reroll,
 }
 
-pub(crate) struct UoBot {
+pub struct UoBot {
     prob_percent: Mutex<u8>,
 }
 
@@ -38,13 +38,12 @@ impl UoBot {
     }
 }
 
-#[async_trait]
-impl BotService for UoBot {
+impl<R: Runtime> BotService<R> for UoBot {
     fn name(&self) -> &'static str {
         NAME
     }
 
-    async fn on_message(&self, msg: &dyn Message, ctx: &dyn Context) -> Result<()> {
+    async fn on_message(&self, msg: &R::Message, ctx: &R::Context) -> Result<()> {
         {
             let p = *self.prob_percent.lock().await;
             if rand::random::<f64>() < (p as f64 / 100.0) {

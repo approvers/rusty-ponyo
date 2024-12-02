@@ -43,9 +43,9 @@ async fn async_main() -> Result<()> {
     let remote_db = crate::db::mongodb::MongoDb::new(&env_var("MONGODB_ATLAS_URI")?).await?;
 
     #[cfg(feature = "console_client")]
-    let mut client = crate::client::console::ConsoleClient::new();
+    let client = crate::client::console::ConsoleClient::new();
     #[cfg(feature = "discord_client")]
-    let mut client = crate::client::discord::DiscordClient::new();
+    let client = crate::client::discord::DiscordClient::new();
 
     #[cfg(feature = "plot_plotters")]
     let plotter = plot::plotters::Plotters::new();
@@ -59,7 +59,7 @@ async fn async_main() -> Result<()> {
         .map(|x| x.to_string())
         .collect();
 
-    client
+    let client = client
         .add_service(MessageAliasBot::new(local_db.clone()))
         .add_service(GenkaiPointBot::new(local_db.clone(), plotter))
         .add_service(GitHubCodePreviewBot)
@@ -69,7 +69,7 @@ async fn async_main() -> Result<()> {
 
     #[cfg(feature = "console_client")]
     {
-        client.add_service(UoBot::new());
+        let client = client.add_service(UoBot::new());
         client.run().await?;
     }
     #[cfg(feature = "discord_client")]
@@ -78,8 +78,7 @@ async fn async_main() -> Result<()> {
         let base = tokio::spawn(async move { client.run(&token).await });
 
         let token = env_var("DISCORD_UO_TOKEN")?;
-        let mut uo_client = crate::client::discord::DiscordClient::new();
-        uo_client.add_service(UoBot::new());
+        let uo_client = crate::client::discord::DiscordClient::new().add_service(UoBot::new());
         let uo = tokio::spawn(async move { uo_client.run(&token).await });
 
         tokio::select! {

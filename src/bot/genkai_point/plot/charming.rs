@@ -10,12 +10,12 @@ use {
     tokio::sync::oneshot,
 };
 
-pub(crate) struct Charming {
+pub struct Charming {
     renderer: Renderer,
 }
 
 impl Charming {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         let renderer = Renderer::spawn();
 
         Self { renderer }

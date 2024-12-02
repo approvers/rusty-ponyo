@@ -1,11 +1,10 @@
 use {
-    crate::bot::{
-        parse_command, ui, BotService, Context, IsUpdated, Message, KAWAEMON_DISCORD_USER_ID,
-    },
+    crate::bot::{parse_command, ui, BotService, Context, IsUpdated, Message, Runtime, User},
     anyhow::{Context as _, Result},
-    async_trait::async_trait,
     clap::{ArgGroup, ValueEnum},
     model::{Meigen, MeigenId},
+    rusty_ponyo::KAWAEMON_DISCORD_USER_ID,
+    std::future::Future,
 };
 
 pub mod model;
@@ -38,19 +37,26 @@ pub struct FindOptions<'a> {
     pub random: bool,
 }
 
-#[async_trait]
 pub trait MeigenDatabase: Send + Sync {
-    async fn save(
+    fn save(
         &self,
         author: impl Into<String> + Send,
         content: impl Into<String> + Send,
-    ) -> Result<Meigen>;
-    async fn load(&self, id: MeigenId) -> Result<Option<Meigen>>;
-    async fn delete(&self, id: MeigenId) -> Result<IsUpdated>;
-    async fn search(&self, options: FindOptions<'_>) -> Result<Vec<Meigen>>;
-    async fn count(&self) -> Result<u32>;
-    async fn append_loved_user(&self, id: MeigenId, loved_user_id: u64) -> Result<IsUpdated>;
-    async fn remove_loved_user(&self, id: MeigenId, loved_user_id: u64) -> Result<IsUpdated>;
+    ) -> impl Future<Output = Result<Meigen>> + Send;
+    fn load(&self, id: MeigenId) -> impl Future<Output = Result<Option<Meigen>>> + Send;
+    fn delete(&self, id: MeigenId) -> impl Future<Output = Result<IsUpdated>> + Send;
+    fn search(&self, options: FindOptions<'_>) -> impl Future<Output = Result<Vec<Meigen>>> + Send;
+    fn count(&self) -> impl Future<Output = Result<u32>> + Send;
+    fn append_loved_user(
+        &self,
+        id: MeigenId,
+        loved_user_id: u64,
+    ) -> impl Future<Output = Result<IsUpdated>> + Send;
+    fn remove_loved_user(
+        &self,
+        id: MeigenId,
+        loved_user_id: u64,
+    ) -> impl Future<Output = Result<IsUpdated>> + Send;
 }
 
 const NAME: &str = "rusty_ponyo::bot::meigen";
@@ -155,13 +161,12 @@ pub struct MeigenBot<D> {
     db: D,
 }
 
-#[async_trait]
-impl<D: MeigenDatabase> BotService for MeigenBot<D> {
+impl<R: Runtime, D: MeigenDatabase> BotService<R> for MeigenBot<D> {
     fn name(&self) -> &'static str {
         NAME
     }
 
-    async fn on_message(&self, msg: &dyn Message, ctx: &dyn Context) -> Result<()> {
+    async fn on_message(&self, msg: &R::Message, ctx: &R::Context) -> Result<()> {
         if !msg.content().starts_with(PREFIX) {
             return Ok(());
         }

@@ -1,10 +1,7 @@
 use {
     anyhow::{Context as _, Result},
-    async_trait::async_trait,
-    std::{future::Future, pin::Pin},
+    std::future::Future,
 };
-
-const KAWAEMON_DISCORD_USER_ID: u64 = 391857452360007680;
 
 /// 変更が生じた場合 true
 pub type IsUpdated = bool;
@@ -17,97 +14,116 @@ pub mod meigen;
 pub mod uo;
 pub mod vc_diff;
 
-#[async_trait]
-pub(crate) trait Message: Send + Sync {
-    async fn reply(&self, msg: &str) -> Result<()>;
-    fn author(&self) -> &dyn User;
+// Usage of GATs like this:
+// type Message<'a>: Message + 'a;
+// makes hard lifetime error
+// repro: https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=97640973cf3459848463dbd13ba8f951
+// issue: https://github.com/rust-lang/rust/issues/100013
+
+pub trait Message: Send + Sync {
+    type Attachment: Attachment;
+    type User: User;
+
+    fn reply(&self, msg: &str) -> impl Future<Output = Result<()>> + Send;
+    fn author(&self) -> &Self::User;
     fn content(&self) -> &str;
-    fn attachments(&self) -> &[&dyn Attachment];
+    fn attachments(&self) -> &[Self::Attachment];
 }
 
-#[async_trait]
-pub(crate) trait Attachment: Send + Sync {
+pub trait Attachment: Send + Sync {
     fn name(&self) -> &str;
     fn size(&self) -> usize;
-    async fn download(&self) -> Result<Vec<u8>>;
+    fn download(&self) -> impl Future<Output = Result<Vec<u8>>> + Send;
 }
 
-#[async_trait]
-pub(crate) trait User: Send + Sync {
+pub trait User: Send + Sync {
     fn id(&self) -> u64;
-    #[allow(unused)]
     fn name(&self) -> &str;
-    async fn dm(&self, msg: SendMessage<'_>) -> Result<()>;
+    fn dm(&self, msg: SendMessage<'_>) -> impl Future<Output = Result<()>> + Send;
 
-    fn dm_text<'a>(
-        &'a self,
-        text: &'a str,
-    ) -> Pin<Box<dyn Send + Future<Output = Result<()>> + 'a>> {
-        self.dm(SendMessage {
-            content: text,
-            attachments: &[],
-        })
+    fn dm_text(&self, text: &str) -> impl Future<Output = Result<()>> + Send {
+        async move {
+            self.dm(SendMessage {
+                content: text,
+                attachments: &[],
+            })
+            .await
+        }
     }
 }
 
-pub(crate) struct SendMessage<'a> {
-    pub(crate) content: &'a str,
-    pub(crate) attachments: &'a [SendAttachment<'a>],
+pub struct SendMessage<'a> {
+    pub content: &'a str,
+    pub attachments: &'a [SendAttachment<'a>],
 }
 
-pub(crate) struct SendAttachment<'a> {
-    pub(crate) name: &'a str,
+pub struct SendAttachment<'a> {
+    pub name: &'a str,
     #[allow(dead_code)]
-    pub(crate) data: &'a [u8],
+    pub data: &'a [u8],
 }
 
-#[async_trait]
-pub(crate) trait Context: Send + Sync {
-    async fn send_message(&self, msg: SendMessage<'_>) -> Result<()>;
-    async fn get_user_name(&self, user_id: u64) -> Result<String>;
-    async fn is_bot(&self, user_id: u64) -> Result<bool>;
+pub trait Context: Send + Sync {
+    fn send_message(&self, msg: SendMessage<'_>) -> impl Future<Output = Result<()>> + Send;
+    fn get_user_name(&self, user_id: u64) -> impl Future<Output = Result<String>> + Send;
+    fn is_bot(&self, user_id: u64) -> impl Future<Output = Result<bool>> + Send;
 
-    #[must_use = "Futures do nothing unless polled"]
-    fn send_text_message<'a>(
-        &'a self,
-        text: &'a str,
-    ) -> Pin<Box<dyn Send + Future<Output = Result<()>> + 'a>> {
-        self.send_message(SendMessage {
-            content: text,
-            attachments: &[],
-        })
+    fn send_text_message(&self, text: &str) -> impl Future<Output = Result<()>> + Send {
+        async move {
+            self.send_message(SendMessage {
+                content: text,
+                attachments: &[],
+            })
+            .await
+        }
     }
 }
 
-#[async_trait]
-pub(crate) trait BotService: Send + Sync {
+pub trait Runtime {
+    type Message: Message;
+    type Context: Context;
+}
+
+pub trait BotService<R: Runtime>: Send + Sync {
     fn name(&self) -> &'static str;
 
-    async fn on_message(&self, _msg: &dyn Message, _ctx: &dyn Context) -> Result<()> {
-        Ok(())
+    fn on_message(
+        &self,
+        _msg: &R::Message,
+        _ctx: &R::Context,
+    ) -> impl Future<Output = Result<()>> + Send {
+        async { Ok(()) }
     }
 
     // called on bot started and got who is currently joined to vc
-    async fn on_vc_data_available(
+    fn on_vc_data_available(
         &self,
-        _ctx: &dyn Context,
+        _ctx: &R::Context,
         _joined_user_ids: &[u64],
-    ) -> Result<()> {
-        Ok(())
+    ) -> impl Future<Output = Result<()>> + Send {
+        async { Ok(()) }
     }
 
     // called on user has joined to vc
-    async fn on_vc_join(&self, _ctx: &dyn Context, _user_id: u64) -> Result<()> {
-        Ok(())
+    fn on_vc_join(
+        &self,
+        _ctx: &R::Context,
+        _user_id: u64,
+    ) -> impl Future<Output = Result<()>> + Send {
+        async { Ok(()) }
     }
 
     // called on user has left from vc and not in any channel
-    async fn on_vc_leave(&self, _ctx: &dyn Context, _user_id: u64) -> Result<()> {
-        Ok(())
+    fn on_vc_leave(
+        &self,
+        _ctx: &R::Context,
+        _user_id: u64,
+    ) -> impl Future<Output = Result<()>> + Send {
+        async { Ok(()) }
     }
 }
 
-async fn parse_command<Ui: clap::Parser>(message: &str, ctx: &dyn Context) -> Result<Option<Ui>> {
+async fn parse_command<Ui: clap::Parser>(message: &str, ctx: &impl Context) -> Result<Option<Ui>> {
     let words = match shellwords::split(message) {
         Ok(w) => w,
         Err(_) => {

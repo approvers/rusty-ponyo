@@ -11,7 +11,6 @@ use {
         IsUpdated,
     },
     anyhow::{anyhow, Context as _, Result},
-    async_trait::async_trait,
     chrono::{DateTime, Duration, Utc},
     rand::{seq::SliceRandom, thread_rng},
     serde::Serialize,
@@ -27,7 +26,7 @@ struct MemoryDBInner {
     meigens: Vec<Meigen>,
 }
 
-pub(crate) struct MemoryDB(Arc<Mutex<MemoryDBInner>>);
+pub struct MemoryDB(Arc<Mutex<MemoryDBInner>>);
 
 impl Clone for MemoryDB {
     fn clone(&self) -> Self {
@@ -36,7 +35,7 @@ impl Clone for MemoryDB {
 }
 
 impl MemoryDB {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self(Arc::new(Mutex::new(MemoryDBInner {
             aliases: vec![],
             sessions: vec![],
@@ -51,7 +50,7 @@ impl MemoryDB {
 }
 
 impl MemoryDBInner {
-    pub(crate) async fn dump(&self) -> Result<()> {
+    pub async fn dump(&self) -> Result<()> {
         let json = serde_json::to_string_pretty(self).context("failed to serialize")?;
 
         tokio::fs::write("mem_db_dump.json", json)
@@ -62,7 +61,6 @@ impl MemoryDBInner {
     }
 }
 
-#[async_trait]
 impl MessageAliasDatabase for MemoryDB {
     async fn save(&self, alias: MessageAlias) -> Result<()> {
         let mut me = self.inner().await;
@@ -124,7 +122,6 @@ impl MessageAliasDatabase for MemoryDB {
     }
 }
 
-#[async_trait]
 impl GenkaiPointDatabase for MemoryDB {
     async fn create_new_session(
         &self,
@@ -228,7 +225,6 @@ struct AuthEntry {
     token: Option<String>,
 }
 
-#[async_trait]
 impl GenkaiAuthDatabase for MemoryDB {
     async fn register_pgp_key(&self, user_id: u64, key: &str) -> Result<()> {
         self.inner()
@@ -282,7 +278,6 @@ impl GenkaiAuthDatabase for MemoryDB {
     }
 }
 
-#[async_trait]
 impl MeigenDatabase for MemoryDB {
     async fn save(
         &self,

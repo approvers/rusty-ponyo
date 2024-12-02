@@ -16,8 +16,8 @@ pub(super) struct MongoMessageAlias {
     pub(super) key: String,
     pub(super) message: String,
     pub(super) attachments: Vec<MongoMessageAliasAttachment>,
-    pub(crate) usage_count: i64,
-    pub(crate) created_at: DateTime,
+    pub usage_count: i64,
+    pub created_at: DateTime,
 }
 
 impl From<MessageAlias> for MongoMessageAlias {

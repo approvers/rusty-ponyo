@@ -1,7 +1,6 @@
 use {
-    crate::bot::{parse_command, ui, BotService, Context, Message},
+    crate::bot::{parse_command, ui, BotService, Context, Message, Runtime, User},
     anyhow::{Context as _, Result},
-    async_trait::async_trait,
     rand::{prelude::StdRng, Rng, SeedableRng},
     sequoia_openpgp::{
         cert::CertParser,
@@ -11,7 +10,7 @@ use {
         Cert,
     },
     sha2::Digest,
-    std::{io::Write, time::Duration},
+    std::{future::Future, io::Write, time::Duration},
     url::{Host, Origin, Url},
 };
 
@@ -50,28 +49,31 @@ enum SetCommand {
     },
 }
 
-#[async_trait]
-pub(crate) trait GenkaiAuthDatabase: Send + Sync {
-    async fn register_pgp_key(&self, user_id: u64, cert: &str) -> Result<()>;
-    async fn get_pgp_key(&self, user_id: u64) -> Result<Option<String>>;
+pub trait GenkaiAuthDatabase: Send + Sync {
+    fn register_pgp_key(&self, user_id: u64, cert: &str)
+        -> impl Future<Output = Result<()>> + Send;
+    fn get_pgp_key(&self, user_id: u64) -> impl Future<Output = Result<Option<String>>> + Send;
 
-    async fn register_token(&self, user_id: u64, hashed_token: &str) -> Result<()>;
-    async fn revoke_token(&self, user_id: u64) -> Result<()>;
-    async fn get_token(&self, user_id: u64) -> Result<Option<String>>;
+    fn register_token(
+        &self,
+        user_id: u64,
+        hashed_token: &str,
+    ) -> impl Future<Output = Result<()>> + Send;
+    fn revoke_token(&self, user_id: u64) -> impl Future<Output = Result<()>> + Send;
+    fn get_token(&self, user_id: u64) -> impl Future<Output = Result<Option<String>>> + Send;
 }
 
-pub(crate) struct GenkaiAuthBot<D> {
+pub struct GenkaiAuthBot<D> {
     db: D,
     pgp_pubkey_source_domain_whitelist: Vec<String>,
 }
 
-#[async_trait]
-impl<D: GenkaiAuthDatabase> BotService for GenkaiAuthBot<D> {
+impl<R: Runtime, D: GenkaiAuthDatabase> BotService<R> for GenkaiAuthBot<D> {
     fn name(&self) -> &'static str {
         NAME
     }
 
-    async fn on_message(&self, msg: &dyn Message, ctx: &dyn Context) -> Result<()> {
+    async fn on_message(&self, msg: &R::Message, ctx: &R::Context) -> Result<()> {
         if !msg.content().starts_with(PREFIX) {
             return Ok(());
         }
@@ -93,14 +95,14 @@ impl<D: GenkaiAuthDatabase> BotService for GenkaiAuthBot<D> {
 }
 
 impl<D: GenkaiAuthDatabase> GenkaiAuthBot<D> {
-    pub(crate) fn new(db: D, pubkey_whitelist: Vec<String>) -> Self {
+    pub fn new(db: D, pubkey_whitelist: Vec<String>) -> Self {
         Self {
             db,
             pgp_pubkey_source_domain_whitelist: pubkey_whitelist,
         }
     }
 
-    async fn set_pgp(&self, msg: &dyn Message, ctx: &dyn Context, url: &str) -> Result<()> {
+    async fn set_pgp(&self, msg: &impl Message, ctx: &impl Context, url: &str) -> Result<()> {
         let verify_result = match self.verify_url(url) {
             Ok(_) => download_gpg_key(url).await,
             Err(e) => Err(e),
@@ -127,7 +129,7 @@ impl<D: GenkaiAuthDatabase> GenkaiAuthBot<D> {
         Ok(())
     }
 
-    async fn token(&self, msg: &dyn Message, ctx: &dyn Context) -> Result<()> {
+    async fn token(&self, msg: &impl Message, ctx: &impl Context) -> Result<()> {
         let author = msg.author();
 
         if self.db.get_token(author.id()).await?.is_some() {
@@ -171,7 +173,7 @@ impl<D: GenkaiAuthDatabase> GenkaiAuthBot<D> {
         Ok(())
     }
 
-    async fn revoke(&self, msg: &dyn Message, ctx: &dyn Context) -> Result<()> {
+    async fn revoke(&self, msg: &impl Message, ctx: &impl Context) -> Result<()> {
         self.db
             .revoke_token(msg.author().id())
             .await

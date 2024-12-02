@@ -1,24 +1,24 @@
-use {self::v3::FormulaV3, crate::bot::genkai_point::model::Session};
+use {crate::bot::genkai_point::model::Session, v3::FormulaV3};
 
 pub mod v1;
 pub mod v2;
 pub mod v3;
 
-pub(crate) trait GenkaiPointFormula: Send + Sync + 'static {
+pub trait GenkaiPointFormula: Send + Sync + 'static {
     fn name(&self) -> &'static str;
     fn calc(&self, sessions: &[Session]) -> GenkaiPointFormulaOutput;
 }
 
-pub(crate) struct GenkaiPointFormulaOutput {
-    pub(crate) point: u64,
-    pub(crate) efficiency: f64,
+pub struct GenkaiPointFormulaOutput {
+    pub point: u64,
+    pub efficiency: f64,
 }
 
-pub(crate) fn default_formula() -> impl GenkaiPointFormula {
+pub fn default_formula() -> impl GenkaiPointFormula {
     FormulaV3
 }
 
-pub(crate) struct DynGenkaiPointFormula(pub Box<dyn GenkaiPointFormula>);
+pub struct DynGenkaiPointFormula(pub Box<dyn GenkaiPointFormula>);
 
 impl GenkaiPointFormula for DynGenkaiPointFormula {
     fn name(&self) -> &'static str {
