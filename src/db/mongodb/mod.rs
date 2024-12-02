@@ -494,25 +494,25 @@ impl MeigenDatabase for MongoDb {
             random,
         } = options;
 
-        let mut pipeline = vec![
-            {
-                let into_regex = |x| doc! { "$regex": format!(".*{}.*", regex::escape(x)) };
-                let mut doc = Document::new();
-                if let Some(author) = author {
-                    doc.insert("author", into_regex(author));
-                }
-                if let Some(content) = content {
-                    doc.insert("content", into_regex(content));
-                }
-                doc! { "$match": doc } // { $match: {} } is fine, it just matches to any document.
-            },
-            doc! { "$sort": { "id": -1 } },
-            doc! { "$skip": offset },
-        ];
+        let mut pipeline = vec![{
+            let into_regex = |x| doc! { "$regex": format!(".*{}.*", regex::escape(x)) };
+            let mut doc = Document::new();
+            if let Some(author) = author {
+                doc.insert("author", into_regex(author));
+            }
+            if let Some(content) = content {
+                doc.insert("content", into_regex(content));
+            }
+            doc! { "$match": doc } // { $match: {} } is fine, it just matches to any document.
+        }];
 
         if random {
-            // `Randomized` uses its own limit handling
-            pipeline.push(doc! { "$limit": limit as u32 });
+            // `Randomized` skips/limits before shuffling
+            pipeline.extend([
+                doc! { "$skip": offset },
+                doc! { "$sample": { "size": limit as u32 } }, // sample pipeline scrambles document order.
+                doc! { "$limit": limit as u32 },
+            ]);
         }
 
         let dir = if dir.asc() { 1 } else { -1 };
@@ -536,8 +536,8 @@ impl MeigenDatabase for MongoDb {
         };
 
         if !random {
-            // `Randomized` uses its own limit handling
-            pipeline.push(doc! { "$limit": limit as u32 });
+            // `Randomized` skips/limits before shuffling
+            pipeline.extend([doc! { "$skip": offset }, doc! { "$limit": limit as u32 }]);
         }
 
         self.inner
