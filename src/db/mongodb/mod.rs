@@ -515,7 +515,10 @@ impl MeigenDatabase for MongoDb {
             ]);
         }
 
-        let dir = if dir.asc() { 1 } else { -1 };
+        let dir = match dir {
+            SortDirection::Asc => 1,
+            SortDirection::Desc => -1,
+        };
 
         match sort {
             SortKey::Id => pipeline.extend([doc! { "$sort": { "id": dir } }]),

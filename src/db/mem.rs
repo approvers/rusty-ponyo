@@ -1,17 +1,14 @@
 use {
-    crate::{
-        bot::{
-            alias::{model::MessageAlias, MessageAliasDatabase},
-            auth::GenkaiAuthDatabase,
-            genkai_point::{model::Session, CreateNewSessionResult, GenkaiPointDatabase},
-            meigen::{
-                self,
-                model::{Meigen, MeigenId},
-                MeigenDatabase, SortDirection, SortKey,
-            },
-            IsUpdated,
+    crate::bot::{
+        alias::{model::MessageAlias, MessageAliasDatabase},
+        auth::GenkaiAuthDatabase,
+        genkai_point::{model::Session, CreateNewSessionResult, GenkaiPointDatabase},
+        meigen::{
+            self,
+            model::{Meigen, MeigenId},
+            MeigenDatabase, SortDirection, SortKey,
         },
-        trait_ext::TakeAndApplyIf as _,
+        IsUpdated,
     },
     anyhow::{anyhow, Context as _, Result},
     async_trait::async_trait,

@@ -26,18 +26,6 @@ pub enum SortDirection {
     #[clap(alias = "d")]
     Desc,
 }
-impl SortDirection {
-    pub fn reversed(&self) -> Self {
-        use SortDirection::*;
-        match self {
-            Asc => Desc,
-            Desc => Asc,
-        }
-    }
-    pub fn asc(&self) -> bool {
-        self == &SortDirection::Asc
-    }
-}
 
 #[derive(Default)]
 pub struct FindOptions<'a> {
