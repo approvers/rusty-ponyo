@@ -114,7 +114,7 @@ enum Command {
         limit: u8,
 
         /// 指定された場合、検索条件に合致する名言の中からランダムに選び出して出力します
-        #[clap(short = 'R', long)]
+        #[clap(short, long)]
         #[clap(default_value_t = false)]
         random: bool,
 
@@ -135,7 +135,7 @@ enum Command {
         dir: SortDirection,
 
         /// 降順にします。--dir desc のエイリアスです。
-        #[clap(short, long, alias = "rev")]
+        #[clap(short = 'R', long, alias = "rev")]
         #[clap(default_value_t = false)]
         reverse: bool,
     },
