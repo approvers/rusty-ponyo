@@ -4,10 +4,28 @@ use {
     },
     anyhow::{Context as _, Result},
     async_trait::async_trait,
+    clap::{ArgGroup, ValueEnum},
     model::{Meigen, MeigenId},
 };
 
 pub mod model;
+
+#[derive(ValueEnum, Clone, Debug, PartialEq, Eq, Default)]
+pub enum SortKey {
+    #[default]
+    Id,
+    Love,
+    Length,
+}
+
+#[derive(ValueEnum, Clone, Debug, PartialEq, Eq, Default)]
+pub enum SortDirection {
+    #[clap(alias = "a")]
+    #[default]
+    Asc,
+    #[clap(alias = "d")]
+    Desc,
+}
 
 #[derive(Default)]
 pub struct FindOptions<'a> {
@@ -15,6 +33,8 @@ pub struct FindOptions<'a> {
     pub content: Option<&'a str>,
     pub offset: u32,
     pub limit: u8,
+    pub sort: SortKey,
+    pub dir: SortDirection,
     pub random: bool,
 }
 
@@ -75,6 +95,12 @@ enum Command {
     Status,
 
     /// 名言をリスト表示します
+    #[clap(group(
+        ArgGroup::new("dir_conflict")
+            .args(&["dir"])
+            .requires("dir")
+            .conflicts_with("reverse")
+    ))] // --dir and --reverse conflicts
     List {
         /// 表示する名言のオフセット
         #[clap(long)]
@@ -99,6 +125,19 @@ enum Command {
         /// 指定した文字列を含む名言をリスト表示します
         #[clap(long)]
         content: Option<String>,
+
+        /// 指定した項目でソートします。
+        #[clap(value_enum, long, default_value_t)]
+        sort: SortKey,
+
+        /// ソートの順番を入れ替えます。
+        #[clap(value_enum, long, default_value_t)]
+        dir: SortDirection,
+
+        /// 降順にします。--dir desc のエイリアスです。
+        #[clap(short = 'R', long, alias = "rev")]
+        #[clap(default_value_t = false)]
+        reverse: bool,
     },
 
     /// 名言を削除します
@@ -149,13 +188,18 @@ impl<D: MeigenDatabase> BotService for MeigenBot<D> {
                 random,
                 author,
                 content,
+                sort,
+                dir,
+                reverse,
             } => {
                 self.search(FindOptions {
                     author: author.as_deref(),
                     content: content.as_deref(),
-                    random,
                     offset,
                     limit,
+                    sort,
+                    dir: if reverse { SortDirection::Desc } else { dir },
+                    random,
                 })
                 .await?
             }
@@ -210,13 +254,10 @@ impl<D: MeigenDatabase> MeigenBot<D> {
     }
 
     async fn search(&self, opt: FindOptions<'_>) -> Result<String> {
-        let mut res = self.db.search(opt).await?;
-
+        let res = self.db.search(opt).await?;
         if res.is_empty() {
             return Ok("条件に合致する名言が見つかりませんでした".into());
         }
-
-        res.sort_unstable_by_key(|x| x.id);
 
         Ok(list(&res))
     }
