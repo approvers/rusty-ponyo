@@ -9,12 +9,11 @@ use {
             meigen::{
                 self,
                 model::{Meigen, MeigenId},
-                MeigenDatabase, SortDirection,
+                MeigenDatabase, SortDirection, SortKey,
             },
             IsUpdated,
         },
         db::mongodb::model::{GenkaiAuthData, MongoMeigen, MongoMessageAlias, MongoSession},
-        trait_ext::ApplyIf,
     },
     anyhow::{bail, Context as _, Result},
     async_trait::async_trait,
@@ -492,7 +491,7 @@ impl MeigenDatabase for MongoDb {
             limit,
             sort,
             dir,
-            reverse,
+            random,
         } = options;
 
         let mut pipeline = vec![
@@ -511,38 +510,32 @@ impl MeigenDatabase for MongoDb {
             doc! { "$skip": offset },
         ];
 
-        if let Some(sort_key) = &sort {
-            use meigen::SortKey::*;
-
-            let dir = dir
-                .unwrap_or(sort_key.default_sort_dir())
-                .apply_and_take_if(reverse, |dir| dir.reversed());
-            let dir = if dir.asc() { 1 } else { -1 };
-
-            let sort_pipeline = match sort_key {
-                Love => [
-                    doc! {
-                        "$addFields": {
-                            "loved_users": {
-                                "$size": { "$ifNull": ["$loved_user_id", []] }
-                            }
-                        }
-                    },
-                    doc! { "$sort": { "loved_users": dir } },
-                ],
-                Length => [
-                    doc! { "$addFields": { "length": { "$strLenCP": "$content" }}},
-                    doc! { "$sort": { "length": dir } },
-                ],
-                Randomized => [
-                    doc! { "$sample": { "size": limit as u32 } }, // sample pipeline scrambles document order.
-                    doc! { "$sort": { "id": dir } },
-                ],
-            };
-            pipeline.extend(sort_pipeline);
+        if random {
+            // `Randomized` uses its own limit handling
+            pipeline.push(doc! { "$limit": limit as u32 });
         }
 
-        if sort != Some(meigen::SortKey::Randomized) {
+        let dir = if dir.asc() { 1 } else { -1 };
+
+        match sort {
+            SortKey::Id => pipeline.extend([doc! { "$sort": { "id": dir } }]),
+            SortKey::Love => pipeline.extend([
+                doc! {
+                    "$addFields": {
+                        "loved_users": {
+                            "$size": { "$ifNull": ["$loved_user_id", []] }
+                        }
+                    }
+                },
+                doc! { "$sort": { "loved_users": dir } },
+            ]),
+            SortKey::Length => pipeline.extend([
+                doc! { "$addFields": { "length": { "$strLenCP": "$content" }}},
+                doc! { "$sort": { "length": dir } },
+            ]),
+        };
+
+        if !random {
             // `Randomized` uses its own limit handling
             pipeline.push(doc! { "$limit": limit as u32 });
         }
