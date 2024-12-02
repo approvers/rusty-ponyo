@@ -210,7 +210,7 @@ impl<D: MeigenDatabase> BotService for MeigenBot<D> {
                     offset,
                     limit,
                     sort,
-                    dir,
+                    dir: if reverse { SortDirection::Desc } else { dir },
                     random,
                 })
                 .await?
