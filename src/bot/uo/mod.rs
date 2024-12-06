@@ -1,11 +1,24 @@
 use crate::bot::{parse_command, ui, BotService, Context, Message, Runtime, User};
 use anyhow::{Context as _, Result};
+use rand::seq::SliceRandom;
 use rusty_ponyo::KAWAEMON_DISCORD_USER_ID;
 use tokio::sync::Mutex;
 
 const NAME: &str = "rusty_ponyo::bot::uo";
 const PREFIX: &str = "g!uo";
-const UO: &str = "ｳｰｫ";
+const UO_DEFAULT: &str = "ｳｰｫ";
+const UO_CHOICES: &[&str] = &[
+    "ウーォ",
+    "ウウーォ",
+    "ｳｰｫ",
+    "ｩ-ｵ",
+    "ｫｰｳ",
+    "ｵｰｩ",
+    "ｳｫ",
+    "ｫ",
+    "<:wuo:1312654844846411796>",
+    "<:wuo2:1312706662380994571>",
+];
 
 ui! {
     /// ランダムでｳｰｫと言います
@@ -28,6 +41,7 @@ pub struct UoBot {
 
 impl UoBot {
     pub fn new() -> Self {
+        // TODO: 一日ごとに変更したい
         Self {
             prob_percent: Mutex::new(3),
         }
@@ -47,7 +61,8 @@ impl<R: Runtime> BotService<R> for UoBot {
         {
             let p = *self.prob_percent.lock().await;
             if rand::random::<f64>() < (p as f64 / 100.0) {
-                msg.reply(UO).await?;
+                let uo = UO_CHOICES.choose(&mut rand::thread_rng()).unwrap();
+                ctx.send_text_message(uo).await?;
             }
         }
 
@@ -59,26 +74,23 @@ impl<R: Runtime> BotService<R> for UoBot {
             return Ok(());
         };
 
-        use Command::*;
-
-        let msg = match parsed.command {
-            Status => {
+        let reply = match parsed.command {
+            Command::Status => {
                 let prob = self.prob_percent.lock().await;
-                format!("```{UO}確率: {prob}%```")
+                format!("```{UO_DEFAULT}確率: {prob}%```")
             }
-            Reroll => {
+            Command::Reroll => {
                 if msg.author().id() == KAWAEMON_DISCORD_USER_ID {
                     self.reroll().await;
-                    "振り直しました".to_owned()
+                    let prob = self.prob_percent.lock().await;
+                    format!("振り直しました: {prob}%")
                 } else {
                     "かわえもんでないとこの処理はできません".to_owned()
                 }
             }
         };
 
-        ctx.send_text_message(&msg)
-            .await
-            .context("failed to send message")?;
+        msg.reply(&reply).await.context("failed to send message")?;
 
         Ok(())
     }
