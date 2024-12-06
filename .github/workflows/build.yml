@@ -19,6 +19,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly
+          components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.mode }}
