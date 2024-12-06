@@ -38,6 +38,7 @@ jobs:
 
       - uses: actions-rs/clippy-check@v1
         with:
+          toolchain: nightly
           name: ${{ matrix.mode }} clippy
           token: ${{ secrets.GITHUB_TOKEN }}
           args: --no-default-features --features ${{ matrix.mode }}
