@@ -44,4 +44,4 @@ jobs:
           args: --no-default-features --features ${{ matrix.mode }}
 
       - name: test
-        run: cargo test --no-default-features --features ${{ matrix.mode }}
+        run: cargo +nightly test --no-default-features --features ${{ matrix.mode }}
