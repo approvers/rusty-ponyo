@@ -11,37 +11,36 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    strategy:
+      matrix:
+        mode: [dev, prod]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
+      - uses: cargo-bins/cargo-binstall@main
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.mode }}
       - name: install native deps
         run: sudo apt update && sudo apt install clang llvm pkg-config nettle-dev fontforge
+
       - run: |
           rustup toolchain install nightly
-          cargo +nightly install cargo-udeps --locked
+          cargo +nightly binstall cargo-udeps
 
       - run: cargo fmt -- --check
 
       - run: ./download_font.sh
 
-      - run: cargo +nightly udeps --no-default-features --features dev
-      - run: cargo +nightly udeps --no-default-features --features discord_client,mongo_db,plot_plotters_static
+      - run: cargo +nightly udeps --no-default-features --features ${{ matrix.mode }}
 
       - uses: actions-rs/clippy-check@v1
         with:
-          name: dev clippy
+          name: ${{ matrix.mode }} clippy
           token: ${{ secrets.GITHUB_TOKEN }}
-          args: --no-default-features --features dev
-      - uses: actions-rs/clippy-check@v1
-        with:
-          name: prod clippy
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --no-default-features --features discord_client,mongo_db,plot_plotters_static
+          args: --no-default-features --features ${{ matrix.mode }}
 
-      - name: dev test
-        run: cargo test --no-default-features --features dev
-      - name: prod test
-        run: cargo test --no-default-features --features discord_client,mongo_db,plot_plotters_static
+      - name: test
+        run: cargo test --no-default-features --features ${{ matrix.mode }}
