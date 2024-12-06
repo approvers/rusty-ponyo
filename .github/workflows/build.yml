@@ -18,30 +18,26 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: stable
-      - uses: cargo-bins/cargo-binstall@main
+          toolchain: nightly
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.mode }}
       - name: install native deps
         run: sudo apt update && sudo apt install clang llvm pkg-config nettle-dev fontforge
 
-      - run: |
-          rustup toolchain install nightly
-          cargo +nightly binstall cargo-udeps
+      - run: cargo install cargo-udeps --locked
 
       - run: cargo fmt -- --check
 
       - run: ./download_font.sh
 
-      - run: cargo +nightly udeps --no-default-features --features ${{ matrix.mode }}
+      - run: cargo udeps --no-default-features --features ${{ matrix.mode }}
 
       - uses: actions-rs/clippy-check@v1
         with:
-          toolchain: nightly
           name: ${{ matrix.mode }} clippy
           token: ${{ secrets.GITHUB_TOKEN }}
           args: --no-default-features --features ${{ matrix.mode }}
 
       - name: test
-        run: cargo +nightly test --no-default-features --features ${{ matrix.mode }}
+        run: cargo test --no-default-features --features ${{ matrix.mode }}
