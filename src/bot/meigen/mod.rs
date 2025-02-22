@@ -20,9 +20,9 @@ pub enum SortKey {
 #[derive(ValueEnum, Clone, Debug, PartialEq, Eq, Default)]
 pub enum SortDirection {
     #[clap(alias = "a")]
-    #[default]
     Asc,
     #[clap(alias = "d")]
+    #[default]
     Desc,
 }
 
@@ -140,7 +140,7 @@ enum Command {
         #[clap(value_enum, long, default_value_t)]
         dir: SortDirection,
 
-        /// 降順にします。--dir desc のエイリアスです。
+        /// 降順にします。--dir asc のエイリアスです。
         #[clap(short = 'R', long, alias = "rev")]
         #[clap(default_value_t = false)]
         reverse: bool,
@@ -203,7 +203,7 @@ impl<R: Runtime, D: MeigenDatabase> BotService<R> for MeigenBot<D> {
                     offset,
                     limit,
                     sort,
-                    dir: if reverse { SortDirection::Desc } else { dir },
+                    dir: if reverse { SortDirection::Asc } else { dir },
                     random,
                 })
                 .await?
