@@ -5,7 +5,7 @@ use {
     },
     anyhow::Result,
     std::{
-        io::{stdin, stdout, Write},
+        io::{Write, stdin, stdout},
         path::Path,
         time::Instant,
     },
@@ -83,8 +83,7 @@ impl<L: ServiceList<ConsoleRuntime>> ConsoleClient<L> {
                 content: String,
                 attachments: Vec<ConsoleAttachment>,
             }
-            impl ServiceVisitor for Visitor {
-                type Runtime = ConsoleRuntime;
+            impl ServiceVisitor<ConsoleRuntime> for Visitor {
                 async fn visit(&self, service: &impl BotService<ConsoleRuntime>) {
                     let begin = Instant::now();
 

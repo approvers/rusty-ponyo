@@ -47,7 +47,7 @@ impl DiscordClient<ListNil> {
     }
 }
 
-impl<L: ServiceList<DiscordRuntime> + Send + Sync + 'static> DiscordClient<L> {
+impl<L: ServiceList<DiscordRuntime> + 'static> DiscordClient<L> {
     pub fn add_service<S>(self, service: S) -> DiscordClient<ListCons<DiscordRuntime, S, L>>
     where
         S: BotService<DiscordRuntime> + Send + 'static,
@@ -73,7 +73,7 @@ impl<L: ServiceList<DiscordRuntime> + Send + Sync + 'static> DiscordClient<L> {
 
         #[cfg(unix)]
         submit_signal_handler(&client, async {
-            use tokio::signal::unix::{signal, SignalKind};
+            use tokio::signal::unix::{SignalKind, signal};
             signal(SignalKind::terminate())
                 .expect("could not register SIGTERM handler")
                 .recv()
@@ -114,7 +114,7 @@ mod visitors {
         pub msg: &'a DiscordMessage,
         pub ctx: &'a DiscordContext,
     }
-    impl<'a> ForEachService for MessageVisitor<'a> {
+    impl ForEachService for MessageVisitor<'_> {
         const OP: &'static str = "on_message";
         async fn accept(&self, s: &impl BotService<DiscordRuntime>) -> Result<()> {
             s.on_message(self.msg, self.ctx).await
@@ -125,7 +125,7 @@ mod visitors {
         pub ctx: &'a DiscordContext,
         pub users: &'a [u64],
     }
-    impl<'a> ForEachService for VcDataAvailableVisitor<'a> {
+    impl ForEachService for VcDataAvailableVisitor<'_> {
         const OP: &'static str = "on_vc_data_avaialble";
         async fn accept(&self, s: &impl BotService<DiscordRuntime>) -> Result<()> {
             s.on_vc_data_available(self.ctx, self.users).await
@@ -136,7 +136,7 @@ mod visitors {
         pub ctx: &'a DiscordContext,
         pub uid: u64,
     }
-    impl<'a> ForEachService for VcJoinVisitor<'a> {
+    impl ForEachService for VcJoinVisitor<'_> {
         const OP: &'static str = "on_vc_join";
         async fn accept(&self, s: &impl BotService<DiscordRuntime>) -> Result<()> {
             s.on_vc_join(self.ctx, self.uid).await
@@ -147,7 +147,7 @@ mod visitors {
         pub ctx: &'a DiscordContext,
         pub uid: u64,
     }
-    impl<'a> ForEachService for VcLeaveVisitor<'a> {
+    impl ForEachService for VcLeaveVisitor<'_> {
         const OP: &'static str = "on_vc_leave";
         async fn accept(&self, s: &impl BotService<DiscordRuntime>) -> Result<()> {
             s.on_vc_leave(self.ctx, self.uid).await
@@ -177,9 +177,8 @@ impl<L: ServiceList<DiscordRuntime> + 'static> EvHandler<L> {
             ctx: &'a SerenityContext,
             f: F,
         }
-        impl<'a, F: visitors::ForEachService> ServiceVisitor for Visitor<'a, F> {
-            type Runtime = DiscordRuntime;
-            async fn visit(&self, service: &impl BotService<Self::Runtime>) {
+        impl<F: visitors::ForEachService> ServiceVisitor<DiscordRuntime> for Visitor<'_, F> {
+            async fn visit(&self, service: &impl BotService<DiscordRuntime>) {
                 let result = self.f.accept(service).await;
 
                 if let Err(e) = result {
@@ -261,7 +260,9 @@ impl<L: ServiceList<DiscordRuntime> + 'static> EvHandler<L> {
             let guild = match ctx.cache.guild(APPROVERS_GUILD_ID) {
                 Some(g) => g.clone(),
                 None => {
-                    tracing::warn!("missing guild in validate_vc_cache_loop. This is not good sign because mismatch of inner.vc_state can occur.");
+                    tracing::warn!(
+                        "missing guild in validate_vc_cache_loop. This is not good sign because mismatch of inner.vc_state can occur."
+                    );
                     continue;
                 }
             };

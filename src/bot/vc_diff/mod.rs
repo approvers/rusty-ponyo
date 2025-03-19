@@ -1,8 +1,10 @@
 use {
-    crate::bot::{parse_command, ui, BotService, Context, Message, Runtime},
+    crate::bot::{BotService, Context, Message, Runtime, parse_command, ui},
     anyhow::{Context as _, Result},
     chrono::{DateTime, Duration, Utc},
     once_cell::sync::Lazy,
+    std::sync::atomic::AtomicBool,
+    std::sync::atomic::Ordering::Relaxed,
     tokio::sync::Mutex,
 };
 
@@ -31,7 +33,7 @@ enum Command {
 }
 
 pub struct VcDiffBot {
-    enabled: Mutex<bool>,
+    enabled: AtomicBool,
     timeout: Mutex<DateTime<Utc>>,
 }
 
@@ -40,13 +42,13 @@ static TIMEOUT: Lazy<Duration> = Lazy::new(|| Duration::seconds(1));
 impl VcDiffBot {
     pub fn new() -> Self {
         Self {
-            enabled: Mutex::new(false),
+            enabled: AtomicBool::new(false),
             timeout: Mutex::new(Utc::now()),
         }
     }
 
     async fn should_notify(&self) -> bool {
-        if !*self.enabled.lock().await {
+        if !self.enabled.load(Relaxed) {
             return false;
         }
 
@@ -103,18 +105,17 @@ impl<R: Runtime> BotService<R> for VcDiffBot {
 
         let msg = match parsed.command {
             Enable => {
-                *self.enabled.lock().await = true;
+                self.enabled.store(true, Relaxed);
                 "vcdiff を有効化しました"
             }
 
             Disable => {
-                *self.enabled.lock().await = false;
+                self.enabled.store(false, Relaxed);
                 "vcdiff を無効化しました"
             }
 
             Status => {
-                let enabled = *self.enabled.lock().await;
-                if enabled {
+                if self.enabled.load(Relaxed) {
                     "vcdiff は現在有効です"
                 } else {
                     "vcdiff は現在無効です"
