@@ -74,9 +74,9 @@ impl VcDiffBot {
             .context("failed to get user name")?;
 
         let msg = if joined {
-            format!("{name}がVCに入りました")
+            format!("```diff\n+ {name}\n```")
         } else {
-            format!("{name}がVCから抜けました")
+            format!("```diff\n- {name}\n```")
         };
 
         ctx.send_text_message(&msg)
