@@ -1,12 +1,12 @@
 use {
     crate::bot::{
-        alias::{
-            model::{MessageAlias, MessageAliasAttachment},
-            MessageAliasBot, MessageAliasDatabase,
-        },
         Attachment, Context,
+        alias::{
+            MessageAliasBot, MessageAliasDatabase,
+            model::{MessageAlias, MessageAliasAttachment},
+        },
     },
-    anyhow::{anyhow, Context as _, Result},
+    anyhow::{Context as _, Result, anyhow},
     chrono::Utc,
     image::ImageReader,
     libwebp_sys::{WebPConfig, WebPPicture, WebPPreset},

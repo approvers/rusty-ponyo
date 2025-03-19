@@ -6,7 +6,7 @@ use {
     crate::bot::{
         alias::MessageAliasBot,
         auth::GenkaiAuthBot,
-        genkai_point::{plot, GenkaiPointBot},
+        genkai_point::{GenkaiPointBot, plot},
         gh::GitHubCodePreviewBot,
         vc_diff::VcDiffBot,
     },

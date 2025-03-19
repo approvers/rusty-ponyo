@@ -1,16 +1,15 @@
 use {
     crate::bot::{
-        alias::{model::MessageAlias, MessageAliasDatabase},
-        auth::GenkaiAuthDatabase,
-        genkai_point::{model::Session, CreateNewSessionResult, GenkaiPointDatabase},
-        meigen::{
-            self,
-            model::{Meigen, MeigenId},
-            MeigenDatabase, SortDirection, SortKey,
-        },
         IsUpdated,
+        alias::{MessageAliasDatabase, model::MessageAlias},
+        auth::GenkaiAuthDatabase,
+        genkai_point::{CreateNewSessionResult, GenkaiPointDatabase, model::Session},
+        meigen::{
+            self, MeigenDatabase, SortDirection, SortKey,
+            model::{Meigen, MeigenId},
+        },
     },
-    anyhow::{anyhow, Context as _, Result},
+    anyhow::{Context as _, Result, anyhow},
     chrono::{DateTime, Duration, Utc},
     rand::{seq::SliceRandom, thread_rng},
     serde::Serialize,

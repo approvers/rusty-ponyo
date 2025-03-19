@@ -4,15 +4,15 @@ pub mod plot;
 
 use {
     crate::bot::{
+        BotService, Context, Message, Runtime, SendAttachment, SendMessage, User,
         genkai_point::{
             formula::{
-                default_formula, v1::FormulaV1, v2::FormulaV2, DynGenkaiPointFormula,
-                GenkaiPointFormula,
+                DynGenkaiPointFormula, GenkaiPointFormula, default_formula, v1::FormulaV1,
+                v2::FormulaV2,
             },
             model::{Session, UserStat},
         },
-        parse_command, ui, BotService, Context, Message, Runtime, SendAttachment, SendMessage,
-        User,
+        parse_command, ui,
     },
     anyhow::{Context as _, Result},
     chrono::{DateTime, Duration, Utc},
@@ -355,11 +355,7 @@ where
 {
     Box::new(move |a, b| {
         let res = mapper(a).partial_cmp(&mapper(b)).unwrap();
-        if invert {
-            res.reverse()
-        } else {
-            res
-        }
+        if invert { res.reverse() } else { res }
     })
 }
 
@@ -489,10 +485,8 @@ impl<R: Runtime, D: GenkaiPointDatabase, P: Plotter> BotService<R> for GenkaiPoi
             let msg = format!(
                 "<@!{uid}>\n限界ポイント: {pt}pt (+{pt_delta}pt)\n総VC時間: {vc_hour:.2}h (+{vc_hour_delta:.2}h)",
                 uid = user_id,
-
                 pt = stat.genkai_point,
                 pt_delta = this_time_point,
-
                 vc_hour = to_hours(stat.total_vc_duration),
                 vc_hour_delta = to_hours(last_session.duration()),
             );

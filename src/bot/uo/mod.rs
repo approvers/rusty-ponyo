@@ -1,4 +1,4 @@
-use crate::bot::{parse_command, ui, BotService, Context, Message, Runtime, User};
+use crate::bot::{BotService, Context, Message, Runtime, User, parse_command, ui};
 use anyhow::{Context as _, Result};
 use rand::seq::SliceRandom;
 use rusty_ponyo::KAWAEMON_DISCORD_USER_ID;

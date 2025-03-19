@@ -1,13 +1,13 @@
 use {
-    crate::bot::{parse_command, ui, BotService, Context, Message, Runtime, User},
+    crate::bot::{BotService, Context, Message, Runtime, User, parse_command, ui},
     anyhow::{Context as _, Result},
-    rand::{prelude::StdRng, Rng, SeedableRng},
+    rand::{Rng, SeedableRng, prelude::StdRng},
     sequoia_openpgp::{
+        Cert,
         cert::CertParser,
         parse::{PacketParser, Parse},
         policy::StandardPolicy,
         serialize::stream::{Armorer, Encryptor2, LiteralWriter, Message as OpenGPGMessage},
-        Cert,
     },
     sha2::Digest,
     std::{future::Future, io::Write, time::Duration},
@@ -51,7 +51,7 @@ enum SetCommand {
 
 pub trait GenkaiAuthDatabase: Send + Sync {
     fn register_pgp_key(&self, user_id: u64, cert: &str)
-        -> impl Future<Output = Result<()>> + Send;
+    -> impl Future<Output = Result<()>> + Send;
     fn get_pgp_key(&self, user_id: u64) -> impl Future<Output = Result<Option<String>>> + Send;
 
     fn register_token(

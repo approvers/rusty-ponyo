@@ -3,26 +3,25 @@ mod model;
 use {
     crate::{
         bot::{
-            alias::{model::MessageAlias, MessageAliasDatabase},
-            auth::GenkaiAuthDatabase,
-            genkai_point::{model::Session, CreateNewSessionResult, GenkaiPointDatabase},
-            meigen::{
-                self,
-                model::{Meigen, MeigenId},
-                MeigenDatabase, SortDirection, SortKey,
-            },
             IsUpdated,
+            alias::{MessageAliasDatabase, model::MessageAlias},
+            auth::GenkaiAuthDatabase,
+            genkai_point::{CreateNewSessionResult, GenkaiPointDatabase, model::Session},
+            meigen::{
+                self, MeigenDatabase, SortDirection, SortKey,
+                model::{Meigen, MeigenId},
+            },
         },
         db::mongodb::model::{GenkaiAuthData, MongoMeigen, MongoMessageAlias, MongoSession},
     },
-    anyhow::{bail, Context as _, Result},
+    anyhow::{Context as _, Result, bail},
     chrono::{DateTime, Duration, Utc},
     mongodb::{
-        bson::{self, doc, oid::ObjectId, Document},
-        options::ClientOptions,
         Client, Collection, Database,
+        bson::{self, Document, doc, oid::ObjectId},
+        options::ClientOptions,
     },
-    serde::{de::DeserializeOwned, Deserialize},
+    serde::{Deserialize, de::DeserializeOwned},
     tokio_stream::StreamExt,
 };
 

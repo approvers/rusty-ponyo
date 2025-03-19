@@ -1,6 +1,6 @@
 use {
     crate::bot::genkai_point::formula::{GenkaiPointFormula, GenkaiPointFormulaOutput},
-    anyhow::{bail, Result},
+    anyhow::{Result, bail},
     chrono::{DateTime, Duration, Utc},
     ordered_float::NotNan,
     serde::{Deserialize, Serialize},

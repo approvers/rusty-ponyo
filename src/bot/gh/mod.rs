@@ -1,5 +1,5 @@
 use {
-    crate::bot::{parse_command, ui, BotService, Context, Message, Runtime},
+    crate::bot::{BotService, Context, Message, Runtime, parse_command, ui},
     anyhow::{Context as _, Result},
     derivative::Derivative,
     once_cell::sync::Lazy,

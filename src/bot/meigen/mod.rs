@@ -1,5 +1,5 @@
 use {
-    crate::bot::{parse_command, ui, BotService, Context, IsUpdated, Message, Runtime, User},
+    crate::bot::{BotService, Context, IsUpdated, Message, Runtime, User, parse_command, ui},
     anyhow::{Context as _, Result},
     clap::{ArgGroup, ValueEnum},
     model::{Meigen, MeigenId},
@@ -366,12 +366,15 @@ fn format_ascii_meigen(meigen: &Meigen, ascii_art: &str) -> String {
 #[test]
 fn test_format_gopher() {
     assert_eq!(
-        format_ascii_meigen(&Meigen {
-            id: MeigenId(1),
-            author: "あいうえお".to_string(),
-            content: "abcdeあいうえおdddあ".to_string(),
-            loved_user_id: vec![],
-        }, include_str!("./gopher.ascii")),
+        format_ascii_meigen(
+            &Meigen {
+                id: MeigenId(1),
+                author: "あいうえお".to_string(),
+                content: "abcdeあいうえおdddあ".to_string(),
+                loved_user_id: vec![],
+            },
+            include_str!("./gopher.ascii")
+        ),
         "```\n------------------------\n   abcdeあいうえおdddあ\n    --- あいうえお\n------------------------\n    \\\n     \\\n      \\\n         ,_---~~~~~----._         \n  _,,_,*^____      _____``*g*\\\"*, \n / __/ /'     ^.  /      \\ ^@q   f \n[  @f | @))    |  | @))   l  0 _/  \n \\`/   \\~____ / __ \\_____/    \\   \n  |           _l__l_           I   \n  }          [______]           I  \n  ]            | | |            |  \n  ]             ~ ~             |  \n  |                            |   \n   |                           |   \n\n```"
     );
 }
@@ -379,12 +382,15 @@ fn test_format_gopher() {
 #[test]
 fn test_format_ferris() {
     assert_eq!(
-        format_ascii_meigen(&Meigen {
-            id: MeigenId(1),
-            author: "あいうえお".to_string(),
-            content: "abcdeあいうえおdddあ".to_string(),
-            loved_user_id: vec![],
-        }, include_str!("./ferris.ascii")),
+        format_ascii_meigen(
+            &Meigen {
+                id: MeigenId(1),
+                author: "あいうえお".to_string(),
+                content: "abcdeあいうえおdddあ".to_string(),
+                loved_user_id: vec![],
+            },
+            include_str!("./ferris.ascii")
+        ),
         "```\n------------------------\n   abcdeあいうえおdddあ\n    --- あいうえお\n------------------------\n       \\\n        \\\n         \\\n            _~^~^~_\n        \\) /  o o  \\ (/\n          '_   -   _'\n          / '-----' \\\n\n```"
     );
 }

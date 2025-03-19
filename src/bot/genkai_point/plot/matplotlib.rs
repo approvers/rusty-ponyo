@@ -1,7 +1,7 @@
 use {
     crate::bot::genkai_point::plot::Plotter,
-    anyhow::{anyhow, Result},
-    inline_python::{python, Context as PythonContext},
+    anyhow::{Result, anyhow},
+    inline_python::{Context as PythonContext, python},
 };
 
 // Plotter implementation using matplotlib via python.

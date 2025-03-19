@@ -7,7 +7,7 @@ use {
         meigen::model::{Meigen, MeigenId},
     },
     anyhow::{Context as _, Result},
-    mongodb::bson::{spec::BinarySubtype, Binary, DateTime},
+    mongodb::bson::{Binary, DateTime, spec::BinarySubtype},
     serde::{Deserialize, Serialize},
 };
 

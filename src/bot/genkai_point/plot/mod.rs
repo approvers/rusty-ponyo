@@ -1,7 +1,7 @@
 use {
     crate::bot::{
-        genkai_point::{model::Session, GenkaiPointDatabase, Plotter},
         Context,
+        genkai_point::{GenkaiPointDatabase, Plotter, model::Session},
     },
     anyhow::{Context as _, Result},
     chrono::{DateTime, Datelike, Duration, NaiveDate, TimeZone, Utc},
@@ -176,9 +176,11 @@ fn next_day(d: DateTime<Tz>) -> DateTime<Tz> {
 
 /// `tz_aware_sessions` MUST BE SORTED.
 fn sessions_to_duration_progress(tz_aware_sessions: &[TzAwareSession]) -> Option<Vec<Duration>> {
-    debug_assert!(tz_aware_sessions
-        .iter()
-        .all(|x| x.user_id == tz_aware_sessions[0].user_id));
+    debug_assert!(
+        tz_aware_sessions
+            .iter()
+            .all(|x| x.user_id == tz_aware_sessions[0].user_id)
+    );
 
     // is_sorted is not stable yet.
     // debug_assert!(tz_aware_sessions.is_sorted_by_key(|x| x.joined_at));

@@ -3,8 +3,8 @@ pub mod model;
 
 use {
     crate::bot::{
-        alias::model::MessageAlias, parse_command, ui, BotService, Context, IsUpdated, Message,
-        Runtime, SendAttachment, SendMessage,
+        BotService, Context, IsUpdated, Message, Runtime, SendAttachment, SendMessage,
+        alias::model::MessageAlias, parse_command, ui,
     },
     anyhow::Result,
     std::future::Future,
@@ -60,7 +60,7 @@ pub trait MessageAliasDatabase: Send + Sync {
     fn delete(&self, key: &str) -> impl Future<Output = Result<IsUpdated>> + Send;
     fn len(&self) -> impl Future<Output = Result<u32>> + Send;
     fn usage_count_top_n(&self, n: usize)
-        -> impl Future<Output = Result<Vec<MessageAlias>>> + Send;
+    -> impl Future<Output = Result<Vec<MessageAlias>>> + Send;
 }
 
 pub struct MessageAliasBot<D: MessageAliasDatabase> {
