@@ -20,9 +20,9 @@ pub enum SortKey {
 #[derive(ValueEnum, Clone, Debug, PartialEq, Eq, Default)]
 pub enum SortDirection {
     #[clap(alias = "a")]
-    #[default]
     Asc,
     #[clap(alias = "d")]
+    #[default]
     Desc,
 }
 
@@ -140,7 +140,7 @@ enum Command {
         #[clap(value_enum, long, default_value_t)]
         dir: SortDirection,
 
-        /// 降順にします。--dir desc のエイリアスです。
+        /// 降順にします。--dir asc のエイリアスです。
         #[clap(short = 'R', long, alias = "rev")]
         #[clap(default_value_t = false)]
         reverse: bool,
@@ -203,7 +203,7 @@ impl<R: Runtime, D: MeigenDatabase> BotService<R> for MeigenBot<D> {
                     offset,
                     limit,
                     sort,
-                    dir: if reverse { SortDirection::Desc } else { dir },
+                    dir: if reverse { SortDirection::Asc } else { dir },
                     random,
                 })
                 .await?
@@ -393,4 +393,57 @@ fn test_format_ferris() {
         ),
         "```\n------------------------\n   abcdeあいうえおdddあ\n    --- あいうえお\n------------------------\n       \\\n        \\\n         \\\n            _~^~^~_\n        \\) /  o o  \\ (/\n          '_   -   _'\n          / '-----' \\\n\n```"
     );
+}
+
+#[cfg(test)]
+#[tokio::test]
+async fn test_integration() {
+    use crate::client::test::*;
+
+    let db = crate::db::mem::MemoryDB::new();
+    let meigen = MeigenBot::new(db);
+
+    let snapshot = "
+> g!meigen make author1 hey
+Meigen No.1
+```
+hey
+    --- author1
+```
+
+> g!meigen make author2 hello
+Meigen No.2
+```
+hello
+    --- author2
+```
+
+> g!meigen list
+Meigen No.2
+```
+hello
+    --- author2
+```
+Meigen No.1
+```
+hey
+    --- author1
+```
+
+
+> g!meigen list -R
+Meigen No.1
+```
+hey
+    --- author1
+```
+Meigen No.2
+```
+hello
+    --- author2
+```
+    "
+    .trim();
+
+    run(meigen, snapshot).await;
 }

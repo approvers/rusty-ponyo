@@ -8,6 +8,9 @@ pub mod console;
 #[cfg(feature = "discord_client")]
 pub mod discord;
 
+#[cfg(test)]
+pub mod test;
+
 pub trait ServiceVisitor<R: Runtime>: Send + Sync {
     fn visit(&self, service: &impl BotService<R>) -> impl Future<Output = ()> + Send;
 }
