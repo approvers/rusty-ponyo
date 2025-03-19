@@ -33,11 +33,11 @@ dotenv = "0.15"
 hex = "0.4"
 humantime = "2"
 image = "0.25"
-libwebp-sys = "0.11"
+libwebp-sys = "0.12"
 once_cell = "1"
 ordered-float = { version = "4" }
 parking_lot = "0.12"
-rand = "0.8"
+rand = "0.9"
 regex = "1"
 sequoia-openpgp = "1"
 serde = { version = "1", features = ["derive"] }
@@ -55,7 +55,7 @@ tokio-stream = { version = "0.1", optional = true }
 bson = { version = "2.13.0", features = ["chrono-0_4"], optional = true }
 
 # plot_matplotlib
-inline-python = { version = "0.12", optional = true }
+inline-python = { version = "0.14", optional = true }
 
 # plot_plotters
 png = { version = "0.17", optional = true }
