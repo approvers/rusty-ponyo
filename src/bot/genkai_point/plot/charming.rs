@@ -1,9 +1,13 @@
 use {
     crate::bot::genkai_point::plot::Plotter,
-    anyhow::{anyhow, Result},
+    anyhow::{Result, anyhow},
     charming::{
-        component::Axis, element::name_location::NameLocation, series::Line, Chart, ImageFormat,
-        ImageRenderer,
+        Chart, ImageFormat, ImageRenderer,
+        component::{Axis, Legend},
+        datatype::{CompositeValue, DataPoint},
+        element::{AxisType, name_location::NameLocation},
+        series::Line,
+        theme::Theme,
     },
     crossbeam::channel::{Receiver, Sender},
     std::thread,
@@ -25,18 +29,28 @@ impl Charming {
 impl Plotter for Charming {
     async fn plot(&self, data: Vec<(String, Vec<f64>)>) -> Result<Vec<u8>> {
         let chart = data
-            .iter()
+            .into_iter()
             .fold(Chart::new(), |chart, (label, data)| {
-                chart.series(Line::new().name(label).data(data.clone()))
+                let data = data
+                    .into_iter()
+                    .enumerate()
+                    .map(|(x, y)| {
+                        DataPoint::Value(CompositeValue::Array(vec![(x as i64).into(), y.into()]))
+                    })
+                    .collect();
+                chart.series(Line::new().name(label).data(data))
             })
-            .background_color("#FFFFFF")
+            .legend(Legend::new().top("bottom"))
             .x_axis(
                 Axis::new()
+                    .min_interval(1)
+                    .type_(AxisType::Value)
                     .name_location(NameLocation::Center)
                     .name("時間経過(日)"),
             )
             .y_axis(
                 Axis::new()
+                    .type_(AxisType::Value)
                     .name_location(NameLocation::Center)
                     .name("累計VC時間(時)"),
             );
@@ -60,11 +74,11 @@ struct Renderer {
 
 impl Renderer {
     fn render_thread(rx: Receiver<Request>) {
-        let mut renderer = ImageRenderer::new(1280, 720);
+        let mut renderer = ImageRenderer::new(1280, 720).theme(Theme::Dark);
 
         for req in rx {
             let image = renderer
-                .render_format(ImageFormat::Png, &req.data)
+                .render_format(ImageFormat::WebP, &req.data)
                 .map_err(|e| anyhow!("charming error: {e:#?}"));
 
             req.bell.send(Response { image }).ok();
