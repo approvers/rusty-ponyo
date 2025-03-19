@@ -44,7 +44,7 @@ impl UoBot {
     pub fn new() -> Self {
         // TODO: 一日ごとに変更したい
         Self {
-            prob_percent: Mutex::new(3),
+            prob_percent: Mutex::new(2),
         }
     }
 
