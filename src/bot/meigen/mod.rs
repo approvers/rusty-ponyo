@@ -394,3 +394,56 @@ fn test_format_ferris() {
         "```\n------------------------\n   abcdeあいうえおdddあ\n    --- あいうえお\n------------------------\n       \\\n        \\\n         \\\n            _~^~^~_\n        \\) /  o o  \\ (/\n          '_   -   _'\n          / '-----' \\\n\n```"
     );
 }
+
+#[cfg(test)]
+#[tokio::test]
+async fn test_integration() {
+    use crate::client::test::*;
+
+    let db = crate::db::mem::MemoryDB::new();
+    let meigen = MeigenBot::new(db);
+
+    let snapshot = "
+> g!meigen make author1 hey
+Meigen No.1
+```
+hey
+    --- author1
+```
+
+> g!meigen make author2 hello
+Meigen No.2
+```
+hello
+    --- author2
+```
+
+> g!meigen list
+Meigen No.2
+```
+hello
+    --- author2
+```
+Meigen No.1
+```
+hey
+    --- author1
+```
+
+
+> g!meigen list -R
+Meigen No.1
+```
+hey
+    --- author1
+```
+Meigen No.2
+```
+hello
+    --- author2
+```
+    "
+    .trim();
+
+    run(meigen, snapshot).await;
+}

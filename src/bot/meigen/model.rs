@@ -49,14 +49,14 @@ impl std::fmt::Display for Meigen {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let loves = self.loves();
         let loves_description = if loves > 0 {
-            format!("(♥ x{loves})")
+            format!(" (♥ x{loves})")
         } else {
             String::new()
         };
 
         write!(
             f,
-            "Meigen No.{} {}
+            "Meigen No.{}{}
 ```
 {}
     --- {}
