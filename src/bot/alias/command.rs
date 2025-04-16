@@ -19,7 +19,7 @@ const MSG_LENGTH_LIMIT: usize = 2000;
 const ATTACHMENTS_MAX_COUNT: usize = 1;
 const MAX_FILE_SIZE: usize = 512 * 1024;
 
-const MAX_COMPRESSABLE_FILE_SIZE: usize = 1024 * 1024 * 3;
+const MAX_COMPRESSABLE_FILE_SIZE: usize = 1024 * 1024 * 10;
 const COMPRESSABLE_FILE_EXTENSIONS: &[&str] = &[".jpg", ".jpeg", ".png"];
 const COMPRESS_TARGET_SIZE: usize = 1024 * 256;
 
