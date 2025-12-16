@@ -11,7 +11,6 @@ pub mod auth;
 pub mod genkai_point;
 pub mod gh;
 pub mod meigen;
-pub mod uo;
 pub mod vc_diff;
 
 // Usage of GATs like this:
