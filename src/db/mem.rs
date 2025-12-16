@@ -11,7 +11,7 @@ use {
     },
     anyhow::{Context as _, Result, anyhow},
     chrono::{DateTime, Duration, Utc},
-    rand::{seq::SliceRandom, thread_rng},
+    rand::{rng, seq::SliceRandom},
     serde::Serialize,
     std::{collections::HashMap, ops::DerefMut, sync::Arc},
     tokio::sync::Mutex,
@@ -134,14 +134,13 @@ impl GenkaiPointDatabase for MemoryDB {
         let mut me = self.inner().await;
         me.sessions.sort_unstable_by_key(|x| x.joined_at);
 
-        if let Some(session) = me.sessions.iter_mut().rev().find(|x| x.user_id == user_id) {
-            if let Some(left_at) = session.left_at {
-                if (Utc::now() - left_at) < Duration::minutes(5) {
-                    session.left_at = None;
-                    me.dump().await?;
-                    return Ok(CreateNewSessionResult::SessionResumed);
-                }
-            }
+        if let Some(session) = me.sessions.iter_mut().rev().find(|x| x.user_id == user_id)
+            && let Some(left_at) = session.left_at
+            && (Utc::now() - left_at) < Duration::minutes(5)
+        {
+            session.left_at = None;
+            me.dump().await?;
+            return Ok(CreateNewSessionResult::SessionResumed);
         }
 
         me.sessions.push(Session {
@@ -327,13 +326,13 @@ impl MeigenDatabase for MemoryDB {
             .meigens
             .iter()
             .filter(|x| {
-                options.author.map_or(true, |a| x.author.contains(a))
-                    && options.content.map_or(true, |c| x.content.contains(c))
+                options.author.is_none_or(|a| x.author.contains(a))
+                    && options.content.is_none_or(|c| x.content.contains(c))
             })
             .collect::<Vec<_>>();
 
         if options.random {
-            meigens.shuffle(&mut thread_rng());
+            meigens.shuffle(&mut rng());
             meigens.truncate(options.limit as usize);
         }
 

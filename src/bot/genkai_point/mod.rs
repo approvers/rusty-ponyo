@@ -403,7 +403,7 @@ impl<R: Runtime, D: GenkaiPointDatabase, P: Plotter> BotService<R> for GenkaiPoi
                 };
 
                 let inactive_threshold = if include_inactive {
-                    Duration::max_value()
+                    Duration::MAX
                 } else {
                     inactive_threshold
                 };

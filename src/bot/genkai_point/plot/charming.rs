@@ -2,7 +2,7 @@ use {
     crate::bot::genkai_point::plot::Plotter,
     anyhow::{Result, anyhow},
     charming::{
-        Chart, ImageFormat, ImageRenderer,
+        Chart, ImageRenderer,
         component::{Axis, Legend},
         datatype::{CompositeValue, DataPoint},
         element::{AxisType, name_location::NameLocation},
@@ -10,6 +10,7 @@ use {
         theme::Theme,
     },
     crossbeam::channel::{Receiver, Sender},
+    image::ImageFormat,
     std::thread,
     tokio::sync::oneshot,
 };

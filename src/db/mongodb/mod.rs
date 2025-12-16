@@ -118,10 +118,14 @@ impl MessageAliasDatabase for MongoDb {
             ])
             .await
             .context("failed to aggregate top usage counts")?
-            .map(|x| x.map(|x| bson::from_document::<MongoMessageAlias>(x).map(|x| x.into())))
-            .collect::<Result<Result<Vec<_>, _>, _>>()
+            .map(|x| x.context("failed to decode document"))
+            .map(|x| {
+                bson::deserialize_from_document::<MongoMessageAlias>(x?)
+                    .context("failed to decode document")
+                    .map(|x| x.into())
+            })
+            .collect::<Result<Vec<_>, _>>()
             .await
-            .context("failed to decode document")?
             .context("failed to decode document")
     }
 }
@@ -153,7 +157,7 @@ impl MongoDb {
             .next()
             .await
             .pipe(|r| match r {
-                Some(t) => Result::<_, anyhow::Error>::Ok(bson::from_document(t?)?),
+                Some(t) => Result::<_, anyhow::Error>::Ok(bson::deserialize_from_document(t?)?),
                 None => Ok(None),
             })
             .context("failed to deserialize document")
@@ -186,16 +190,16 @@ impl GenkaiPointDatabase for MongoDb {
         {
             let session: Session = session.into();
 
-            if let Some(left_at) = session.left_at {
-                if (Utc::now() - left_at) < Duration::minutes(5) {
-                    self.inner
-                        .collection::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
-                        .update_one(doc! { "_id": doc_id }, doc! { "$unset": { "left_at": "" } })
-                        .await
-                        .context("failed to unset left_at")?;
+            if let Some(left_at) = session.left_at
+                && (Utc::now() - left_at) < Duration::minutes(5)
+            {
+                self.inner
+                    .collection::<MongoSession>(GENKAI_POINT_COLLECTION_NAME)
+                    .update_one(doc! { "_id": doc_id }, doc! { "$unset": { "left_at": "" } })
+                    .await
+                    .context("failed to unset left_at")?;
 
-                    return Ok(CreateNewSessionResult::SessionResumed);
-                }
+                return Ok(CreateNewSessionResult::SessionResumed);
             }
         }
 
@@ -397,9 +401,9 @@ impl MongoDb {
             .context("failed to aggregate")?
             .next()
             .await
-            .context("aggregate returned nothing")?
+            .context("aggregation returned nothing")?
             .context("failed to decode aggregated document")?;
-        bson::from_document(doc).context("failed to deserialize query result")
+        bson::deserialize_from_document(doc).context("failed to deserialize query result")
     }
 }
 
@@ -543,7 +547,7 @@ impl MeigenDatabase for MongoDb {
             .await
             .context("failed to aggregate")?
             .map(|x| x.context("failed to decode document"))
-            .map(|x| bson::from_document(x?).context("failed to deserialize document"))
+            .map(|x| bson::deserialize_from_document(x?).context("failed to deserialize document"))
             .map(|x| MongoMeigen::into_model(x?))
             .collect()
             .await

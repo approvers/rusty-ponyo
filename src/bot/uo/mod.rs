@@ -1,6 +1,6 @@
 use crate::bot::{BotService, Context, Message, Runtime, User, parse_command, ui};
 use anyhow::{Context as _, Result};
-use rand::seq::SliceRandom;
+use rand::seq::IndexedRandom;
 use rusty_ponyo::KAWAEMON_DISCORD_USER_ID;
 use tokio::sync::Mutex;
 
@@ -62,7 +62,7 @@ impl<R: Runtime> BotService<R> for UoBot {
         {
             let p = *self.prob_percent.lock().await;
             if rand::random::<f64>() < (p as f64 / 100.0) {
-                let uo = UO_CHOICES.choose(&mut rand::thread_rng()).unwrap();
+                let uo = UO_CHOICES.choose(&mut rand::rng()).unwrap();
                 ctx.send_text_message(uo).await?;
             }
         }

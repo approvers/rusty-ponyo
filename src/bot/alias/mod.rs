@@ -73,14 +73,14 @@ impl<R: Runtime, D: MessageAliasDatabase> BotService<R> for MessageAliasBot<D> {
     }
 
     async fn on_message(&self, msg: &R::Message, ctx: &R::Context) -> Result<()> {
-        if msg.content().starts_with(PREFIX) {
-            if let Some(msg) = self.on_command(msg, ctx).await? {
-                ctx.send_message(SendMessage {
-                    content: &msg,
-                    attachments: &[],
-                })
-                .await?;
-            }
+        if msg.content().starts_with(PREFIX)
+            && let Some(msg) = self.on_command(msg, ctx).await?
+        {
+            ctx.send_message(SendMessage {
+                content: &msg,
+                attachments: &[],
+            })
+            .await?;
         }
 
         if let Some(alias) = self.db.get_and_increment_usage_count(msg.content()).await? {

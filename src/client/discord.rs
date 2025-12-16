@@ -278,8 +278,7 @@ impl<L: ServiceList<DiscordRuntime> + 'static> EvHandler<L> {
             let serenity_state = &guild.voice_states;
 
             let missing_in_self_state = serenity_state
-                .iter()
-                .map(|(user_id, _)| user_id)
+                .keys()
                 .filter(|x| !self_state.contains(x))
                 .cloned()
                 .collect::<Vec<_>>();

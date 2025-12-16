@@ -7,7 +7,7 @@ use {
         cert::CertParser,
         parse::{PacketParser, Parse},
         policy::StandardPolicy,
-        serialize::stream::{Armorer, Encryptor2, LiteralWriter, Message as OpenGPGMessage},
+        serialize::stream::{Armorer, Encryptor, LiteralWriter, Message as OpenGPGMessage},
     },
     sha2::Digest,
     std::{future::Future, io::Write, time::Duration},
@@ -202,9 +202,9 @@ fn gen_token() -> String {
     const LEN: usize = 80;
     const BLUR: usize = 10;
 
-    let rng = rand::thread_rng();
-    let mut rng = StdRng::from_rng(rng).expect("failed to initialize rng");
-    let rune = |rng: &mut StdRng| rng.gen_range(33u8..=117) as char;
+    let mut seed_rng = rand::rng();
+    let mut rng = StdRng::from_rng(&mut seed_rng);
+    let rune = |rng: &mut StdRng| rng.random_range(33u8..=117) as char;
 
     let mut token = String::with_capacity(PREFIX.len() + LEN + BLUR + 1);
 
@@ -214,7 +214,7 @@ fn gen_token() -> String {
         token.push(rune(&mut rng));
     }
 
-    for _ in 0..rng.gen_range(0..BLUR) {
+    for _ in 0..rng.random_range(0..BLUR) {
         token.push(rune(&mut rng));
     }
 
@@ -278,7 +278,7 @@ fn encrypt(cert: &str, text: &str) -> Result<String> {
     let mut output = vec![];
     let message = OpenGPGMessage::new(&mut output);
     let message = Armorer::new(message).build().unwrap();
-    let message = Encryptor2::for_recipients(message, recipients)
+    let message = Encryptor::for_recipients(message, recipients)
         .build()
         .unwrap();
     let mut message = LiteralWriter::new(message).build().unwrap();
