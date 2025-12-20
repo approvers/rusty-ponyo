@@ -1,10 +1,9 @@
 use {
     super::ServiceVisitor,
     crate::{
+        APPROVERS_DEFAULT_CHANNEL_ID, APPROVERS_GUILD_ID,
         bot::{Attachment, BotService, Context, Message, Runtime, SendMessage, User},
         client::{ListCons, ListNil, ServiceList},
-        APPROVERS_DEFAULT_CHANNEL_ID,
-        APPROVERS_GUILD_ID,
     },
     anyhow::{Context as _, Result},
     serenity::{

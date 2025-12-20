@@ -1,16 +1,15 @@
+use anyhow::{Context as _, Result};
 use rusty_ponyo::{
     bot::{
         alias::MessageAliasBot,
         auth::GenkaiAuthBot,
-        genkai_point::{plot, GenkaiPointBot},
+        genkai_point::{GenkaiPointBot, plot},
         gh::GitHubCodePreviewBot,
         meigen::MeigenBot,
         vc_diff::VcDiffBot,
     },
-    client,
-    db,
+    client, db,
 };
-use anyhow::{Context as _, Result};
 
 assert_one_feature!("discord_client", "console_client");
 assert_one_feature!("mongo_db", "memory_db");
