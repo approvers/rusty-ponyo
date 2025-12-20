@@ -1,9 +1,9 @@
 use {
+    crate::KAWAEMON_DISCORD_USER_ID,
     crate::bot::{BotService, Context, IsUpdated, Message, Runtime, User, parse_command, ui},
     anyhow::{Context as _, Result},
     clap::{ArgGroup, ValueEnum},
     model::{Meigen, MeigenId},
-    rusty_ponyo::KAWAEMON_DISCORD_USER_ID,
     std::future::Future,
 };
 

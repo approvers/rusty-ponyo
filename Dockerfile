@@ -27,8 +27,8 @@ run --mount=type=cache,target=/app/target/,sharing=locked \
 
 copy . .
 run --mount=type=cache,target=/app/target/,sharing=locked \
-    cargo build --release --no-default-features --features prod && \
-    cp /app/target/release/rusty-ponyo /
+    cargo build --release --no-default-features --features prod --bin bot && \
+    cp /app/target/release/bot /
 
 # ---
 
@@ -38,6 +38,6 @@ run groupadd -r ponyo && useradd -r -g ponyo ponyo
 # run apt update && apt install -y nettle
 
 user ponyo
-copy --from=build --chown=ponyo:ponyo /rusty-ponyo .
+copy --from=build --chown=ponyo:ponyo /bot .
 
-cmd ["/rusty-ponyo"]
+cmd ["/bot"]

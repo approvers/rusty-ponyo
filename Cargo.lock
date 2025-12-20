@@ -4083,7 +4083,7 @@ checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 
 [[package]]
 name = "rusty-ponyo"
-version = "2025.12.17"
+version = "2025.12.20"
 dependencies = [
  "anyhow",
  "bson 3.1.0",

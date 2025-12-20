@@ -1,18 +1,16 @@
-mod bot;
-mod client;
-mod db;
-
-use {
-    crate::bot::{
+use rusty_ponyo::{
+    bot::{
         alias::MessageAliasBot,
         auth::GenkaiAuthBot,
-        genkai_point::{GenkaiPointBot, plot},
+        genkai_point::{plot, GenkaiPointBot},
         gh::GitHubCodePreviewBot,
+        meigen::MeigenBot,
         vc_diff::VcDiffBot,
     },
-    anyhow::{Context as _, Result},
-    bot::meigen::MeigenBot,
+    client,
+    db,
 };
+use anyhow::{Context as _, Result};
 
 assert_one_feature!("discord_client", "console_client");
 assert_one_feature!("mongo_db", "memory_db");
@@ -33,19 +31,19 @@ fn main() -> Result<()> {
 
 async fn async_main() -> Result<()> {
     #[cfg(feature = "memory_db")]
-    let local_db = crate::db::mem::MemoryDB::new();
+    let local_db = db::mem::MemoryDB::new();
     #[cfg(feature = "memory_db")]
     let remote_db = local_db.clone();
 
     #[cfg(feature = "mongo_db")]
-    let local_db = crate::db::mongodb::MongoDb::new(&env_var("MONGODB_URI")?).await?;
+    let local_db = db::mongodb::MongoDb::new(&env_var("MONGODB_URI")?).await?;
     #[cfg(feature = "mongo_db")]
-    let remote_db = crate::db::mongodb::MongoDb::new(&env_var("MONGODB_ATLAS_URI")?).await?;
+    let remote_db = db::mongodb::MongoDb::new(&env_var("MONGODB_ATLAS_URI")?).await?;
 
     #[cfg(feature = "console_client")]
-    let client = crate::client::console::ConsoleClient::new();
+    let client = client::console::ConsoleClient::new();
     #[cfg(feature = "discord_client")]
-    let client = crate::client::discord::DiscordClient::new();
+    let client = client::discord::DiscordClient::new();
 
     #[cfg(feature = "plot_plotters")]
     let plotter = plot::plotters::Plotters::new();

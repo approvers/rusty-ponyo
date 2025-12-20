@@ -3,9 +3,10 @@ use {
     crate::{
         bot::{Attachment, BotService, Context, Message, Runtime, SendMessage, User},
         client::{ListCons, ListNil, ServiceList},
+        APPROVERS_DEFAULT_CHANNEL_ID,
+        APPROVERS_GUILD_ID,
     },
     anyhow::{Context as _, Result},
-    rusty_ponyo::{APPROVERS_DEFAULT_CHANNEL_ID, APPROVERS_GUILD_ID},
     serenity::{
         async_trait,
         builder::{CreateAttachment, CreateMessage},
