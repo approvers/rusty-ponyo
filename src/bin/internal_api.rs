@@ -7,7 +7,6 @@ use {
         response::{IntoResponse, Response},
         routing::get,
     },
-    clap::ValueEnum,
     rusty_ponyo::{
         bot::meigen::{
             FindOptions, MeigenDatabase, SortDirection, SortKey,
@@ -79,9 +78,10 @@ struct SearchQuery {
     content: Option<String>,
     offset: Option<u32>,
     limit: Option<u8>,
-    sort: Option<String>,
-    dir: Option<String>,
-    random: Option<bool>,
+    sort: Option<SortKey>,
+    dir: Option<SortDirection>,
+    #[serde(default)]
+    random: bool,
 }
 
 async fn get_meigen_by_id(
@@ -99,8 +99,8 @@ async fn search_meigen(
     State(db): State<Db>,
     Query(q): Query<SearchQuery>,
 ) -> Result<Json<Vec<Meigen>>, ApiError> {
-    let sort = parse_sort(q.sort.as_deref())?;
-    let dir = parse_dir(q.dir.as_deref())?;
+    let sort = q.sort.unwrap_or_default();
+    let dir = q.dir.unwrap_or_default();
     let offset = q.offset.unwrap_or(0);
     let limit = q.limit.unwrap_or(5);
 
@@ -117,7 +117,7 @@ async fn search_meigen(
         limit,
         sort,
         dir,
-        random: q.random.unwrap_or(false),
+        random: q.random,
     };
 
     db.search(options).await.map(Json).map_err(Into::into)
@@ -167,27 +167,6 @@ impl IntoResponse for ApiError {
             }
         }
     }
-}
-
-fn parse_sort(raw: Option<&str>) -> Result<SortKey, ApiError> {
-    raw.map(|s| s.to_lowercase())
-        .as_deref()
-        .map(|s| {
-            SortKey::from_str(s, true)
-                .map_err(|_| ApiError::BadRequest("invalid sort parameter".into()))
-        })
-        .unwrap_or_else(|| Ok(SortKey::Id))
-}
-
-fn parse_dir(raw: Option<&str>) -> Result<SortDirection, ApiError> {
-    raw.map(|s| s.to_lowercase())
-        .as_deref()
-        .map(|s| match s {
-            "asc" | "a" => Ok(SortDirection::Asc),
-            "desc" | "d" => Ok(SortDirection::Desc),
-            _ => Err(ApiError::BadRequest("invalid dir parameter".into())),
-        })
-        .unwrap_or_else(|| Ok(SortDirection::Desc))
 }
 
 fn env_var(name: &str) -> anyhow::Result<String> {

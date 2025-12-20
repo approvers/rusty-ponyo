@@ -4,12 +4,14 @@ use {
     anyhow::{Context as _, Result},
     clap::{ArgGroup, ValueEnum},
     model::{Meigen, MeigenId},
+    serde::{Deserialize, Serialize},
     std::future::Future,
 };
 
 pub mod model;
 
-#[derive(ValueEnum, Clone, Debug, PartialEq, Eq, Default)]
+#[derive(ValueEnum, Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum SortKey {
     #[default]
     Id,
@@ -17,7 +19,8 @@ pub enum SortKey {
     Length,
 }
 
-#[derive(ValueEnum, Clone, Debug, PartialEq, Eq, Default)]
+#[derive(ValueEnum, Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum SortDirection {
     #[clap(alias = "a")]
     Asc,
