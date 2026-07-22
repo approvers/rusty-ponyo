@@ -6,8 +6,9 @@ use {
         client::{ListCons, ListNil, ServiceList},
     },
     anyhow::{Context as _, Result},
+    reqwest::StatusCode,
     serenity::{
-        all::ModelError,
+        all::{DiscordJsonError, ErrorResponse, HttpError::UnsuccessfulRequest, ModelError},
         async_trait,
         builder::{CreateAttachment, CreateMessage},
         model::{
@@ -190,8 +191,11 @@ impl<L: ServiceList<DiscordRuntime> + 'static> EvHandler<L> {
                     );
 
                     // 権限がないのは rusty-ponyo 悪くないので無視
-                    if let Some(serenity::Error::Model(ModelError::InvalidPermissions { .. })) =
-                        e.downcast_ref()
+                    if let Some(serenity::Error::Http(UnsuccessfulRequest(ErrorResponse {
+                        status_code: StatusCode::FORBIDDEN,
+                        error: DiscordJsonError { code: 50001, .. },
+                        ..
+                    }))) = e.downcast_ref()
                     {
                         return;
                     }
