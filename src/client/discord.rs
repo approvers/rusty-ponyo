@@ -183,7 +183,7 @@ impl<L: ServiceList<DiscordRuntime> + 'static> EvHandler<L> {
 
                 if let Err(e) = result {
                     tracing::error!(
-                        "Service({})::{} returned error: {e:?}",
+                        "Service({})::{} returned error: {e:?}\n{e:#?}",
                         F::OP,
                         service.name()
                     );
