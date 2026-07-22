@@ -1,7 +1,7 @@
 use {
     crate::bot::{BotService, Context, Message, Runtime, User, parse_command, ui},
     anyhow::{Context as _, Result},
-    rand::{Rng, SeedableRng, prelude::StdRng},
+    rand::{RngExt, SeedableRng, prelude::StdRng},
     sequoia_openpgp::{
         Cert,
         cert::CertParser,
