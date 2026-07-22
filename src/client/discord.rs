@@ -8,7 +8,7 @@ use {
     anyhow::{Context as _, Result},
     reqwest::StatusCode,
     serenity::{
-        all::{DiscordJsonError, ErrorResponse, HttpError::UnsuccessfulRequest, ModelError},
+        all::{DiscordJsonError, ErrorResponse, HttpError::UnsuccessfulRequest},
         async_trait,
         builder::{CreateAttachment, CreateMessage},
         model::{
