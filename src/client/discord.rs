@@ -7,6 +7,7 @@ use {
     },
     anyhow::{Context as _, Result},
     serenity::{
+        all::ModelError,
         async_trait,
         builder::{CreateAttachment, CreateMessage},
         model::{
@@ -187,6 +188,13 @@ impl<L: ServiceList<DiscordRuntime> + 'static> EvHandler<L> {
                         F::OP,
                         service.name()
                     );
+
+                    // 権限がないのは rusty-ponyo 悪くないので無視
+                    if let Some(serenity::Error::Model(ModelError::InvalidPermissions { .. })) =
+                        e.downcast_ref()
+                    {
+                        return;
+                    }
 
                     SerenityChannelId::new(APPROVERS_DEFAULT_CHANNEL_ID)
                         .say(
