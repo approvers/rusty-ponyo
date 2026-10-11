@@ -194,7 +194,11 @@ impl<L: ServiceList<DiscordRuntime> + 'static> EvHandler<L> {
                     // https://docs.discord.com/developers/topics/opcodes-and-status-codes
                     if let Some(serenity::Error::Http(UnsuccessfulRequest(ErrorResponse {
                         status_code: StatusCode::FORBIDDEN,
-                        error: DiscordJsonError { code: 50001 | 50013, .. },
+                        error:
+                            DiscordJsonError {
+                                code: 50001 | 50013,
+                                ..
+                            },
                         ..
                     }))) = e.downcast_ref()
                     {
