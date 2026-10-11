@@ -191,9 +191,10 @@ impl<L: ServiceList<DiscordRuntime> + 'static> EvHandler<L> {
                     );
 
                     // 権限がないのは rusty-ponyo 悪くないので無視
+                    // https://docs.discord.com/developers/topics/opcodes-and-status-codes
                     if let Some(serenity::Error::Http(UnsuccessfulRequest(ErrorResponse {
                         status_code: StatusCode::FORBIDDEN,
-                        error: DiscordJsonError { code: 50001, .. },
+                        error: DiscordJsonError { code: 50001 | 50013, .. },
                         ..
                     }))) = e.downcast_ref()
                     {
