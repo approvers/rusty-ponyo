@@ -37,7 +37,7 @@ image = "0.25"
 libwebp-sys = "0.14"
 once_cell = "1"
 ordered-float = { version = "5" }
-parking_lot = "0.12"
+parking_lot = "0.13"
 rand = "0.10"
 regex = "1"
 sequoia-openpgp = "2"
